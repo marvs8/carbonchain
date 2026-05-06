@@ -68,4 +68,69 @@ export class AuthService {
       network_passphrase: this.networkPassphrase,
     };
   }
+
+  /**
+   * SEP-10 §3.3 — Verify the client-signed challenge transaction and issue a JWT.
+   * Validates:
+   *  1. Transaction is parseable and within time bounds
+   *  2. Server signature is present and valid
+   *  3. Client signature is present and valid on the manageData operation
+   */
+  async verifyAndIssueToken(signedTransactionXdr: string): Promise<{ access_token: string }> {
+    let tx: Transaction;
+    try {
+      tx = new Transaction(signedTransactionXdr, this.networkPassphrase);
+    } catch {
+      throw new BadRequestException('Invalid transaction XDR');
+    }
+
+    // Check time bounds
+    const now = Math.floor(Date.now() / 1000);
+    const timeBounds = tx.timeBounds;
+    if (!timeBounds || now < Number(timeBounds.minTime) || now > Number(timeBounds.maxTime)) {
+      throw new UnauthorizedException('Challenge transaction has expired or is not yet valid');
+    }
+
+    // Extract client account from the first manageData operation source
+    const manageDataOp = tx.operations.find((op) => op.type === 'manageData');
+    if (!manageDataOp || !manageDataOp.source) {
+      throw new BadRequestException('Challenge transaction missing manageData operation');
+    }
+    const clientAccount = manageDataOp.source;
+
+    if (!StrKey.isValidEd25519PublicKey(clientAccount)) {
+      throw new BadRequestException('Invalid client account in challenge');
+    }
+
+    // Verify server signature
+    const serverKeypair = this.keypairService.getAdminKeypair();
+    const txHash = tx.hash();
+    const serverSig = tx.signatures.find((sig) => {
+      try {
+        return serverKeypair.verify(txHash, sig.signature());
+      } catch {
+        return false;
+      }
+    });
+    if (!serverSig) {
+      throw new UnauthorizedException('Server signature missing or invalid');
+    }
+
+    // Verify client signature
+    const clientKeypair = Keypair.fromPublicKey(clientAccount);
+    const clientSig = tx.signatures.find((sig) => {
+      try {
+        return clientKeypair.verify(txHash, sig.signature());
+      } catch {
+        return false;
+      }
+    });
+    if (!clientSig) {
+      throw new UnauthorizedException('Client signature missing or invalid');
+    }
+
+    const access_token = this.jwtService.sign({ account: clientAccount });
+    this.logger.log(`Issued JWT for account: ${clientAccount}`);
+    return { access_token };
+  }
 }
