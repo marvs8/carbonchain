@@ -101,7 +101,12 @@ impl CreditRegistry {
             return Err(CarbonChainError::InvalidTonnes);
         }
 
-        let id: BytesN<32> = env.crypto().sha256(&project_id.clone().to_xdr(&env)).into();
+        // Include a per-contract nonce so two credits for the same project get distinct IDs.
+        let nonce: u64 = env.storage().instance().get(&crate::types::DataKey::CreditNonce).unwrap_or(0u64);
+        env.storage().instance().set(&crate::types::DataKey::CreditNonce, &(nonce + 1));
+        let mut preimage = project_id.clone().to_xdr(&env);
+        preimage.append(&nonce.to_xdr(&env));
+        let id: BytesN<32> = env.crypto().sha256(&preimage).into();
         let metadata = CreditMetadata {
             project_id: project_id.clone(),
             issuer: issuer.clone(),
