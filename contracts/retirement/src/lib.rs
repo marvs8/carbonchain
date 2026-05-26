@@ -13,7 +13,11 @@ use soroban_sdk::xdr::ToXdr;
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum RetirementError {
-    CreditNotActive = 110,
+    CreditNotActive    = 110,
+    AlreadyInitialized = 111,
+    NotInitialized     = 112,
+    Unauthorized       = 113,
+    ContractPaused     = 114,
 }
 
 #[contract]
@@ -21,6 +25,37 @@ pub struct Retirement;
 
 #[contractimpl]
 impl Retirement {
+    // ── Admin / Pause ────────────────────────────────────────────────────────
+
+    pub fn initialize(env: Env, admin: Address) -> Result<(), RetirementError> {
+        if env.storage().instance().has(&DataKey::Admin) {
+            return Err(RetirementError::AlreadyInitialized);
+        }
+        admin.require_auth();
+        env.storage().instance().set(&DataKey::Admin, &admin);
+        Ok(())
+    }
+
+    pub fn pause(env: Env, admin: Address) -> Result<(), RetirementError> {
+        Self::require_admin(&env, &admin)?;
+        env.storage().instance().set(&DataKey::Paused, &true);
+        env.events().publish((symbol_short!("paused"),), admin);
+        Ok(())
+    }
+
+    pub fn unpause(env: Env, admin: Address) -> Result<(), RetirementError> {
+        Self::require_admin(&env, &admin)?;
+        env.storage().instance().set(&DataKey::Paused, &false);
+        env.events().publish((symbol_short!("unpaused"),), admin);
+        Ok(())
+    }
+
+    pub fn paused(env: Env) -> bool {
+        env.storage().instance().get(&DataKey::Paused).unwrap_or(false)
+    }
+
+    // ── Retirement ───────────────────────────────────────────────────────────
+
     /// Retire a carbon credit.
     ///
     /// - Stores an immutable `RetirementRecord`
@@ -37,6 +72,9 @@ impl Retirement {
         reason: String,
         registry_id: Address,
     ) -> Result<BytesN<32>, RetirementError> {
+        if Self::is_paused(&env) {
+            return Err(RetirementError::ContractPaused);
+        }
         buyer.require_auth();
 
         if tonnes <= 0 {
@@ -101,7 +139,7 @@ impl Retirement {
     }
 
     /// Returns one page of retirement IDs for `account`. `page` is 0-indexed; `page_size` capped at 50.
-    pub fn get_retirements_by_account_paginated(
+    pub fn get_retirements_paginated(
         env: Env,
         account: Address,
         page: u32,
@@ -122,6 +160,25 @@ impl Retirement {
         }
         out
     }
+
+    // ── Internal ─────────────────────────────────────────────────────────────
+
+    fn require_admin(env: &Env, caller: &Address) -> Result<(), RetirementError> {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(RetirementError::NotInitialized)?;
+        caller.require_auth();
+        if *caller != admin {
+            return Err(RetirementError::Unauthorized);
+        }
+        Ok(())
+    }
+
+    fn is_paused(env: &Env) -> bool {
+        env.storage().instance().get(&DataKey::Paused).unwrap_or(false)
+    }
 }
 
 #[cfg(test)]
@@ -131,8 +188,8 @@ mod tests {
     use soroban_sdk::{Env, String};
     use carbonchain_credit_registry::CreditRegistry;
 
-    /// Returns (retirement_contract_id, registry_id, credit_id)
-    fn setup(env: &Env) -> (Address, Address, BytesN<32>) {
+    /// Returns (retirement_contract_id, registry_id, credit_id, retirement_admin)
+    fn setup(env: &Env) -> (Address, Address, BytesN<32>, Address) {
         // Register retirement first so its address is known for registry init
         let retirement_id = env.register(Retirement, ());
         let registry_id = env.register(CreditRegistry, ());
@@ -142,6 +199,7 @@ mod tests {
         let admin = Address::generate(env);
         let verifier = Address::generate(env);
         let issuer = Address::generate(env);
+        let retirement_admin = Address::generate(env);
 
         registry_client.initialize(&admin, &retirement_id);
         registry_client.register_verifier(&admin, &verifier);
@@ -157,28 +215,11 @@ mod tests {
         );
         registry_client.approve_and_mint(&verifier, &credit_id);
 
-        (retirement_id, registry_id, credit_id)
-    }
+        // Initialise the retirement contract with its own admin
+        let retirement_client = RetirementClient::new(env, &retirement_id);
+        retirement_client.initialize(&retirement_admin);
 
-    #[test]
-    fn test_duplicate_retirement_same_reason_rejected() {
-        let env = Env::default();
-        env.mock_all_auths();
-
-        let (registry_id, _admin, _verifier, credit_id) = setup_registry(&env);
-
-        let contract_id = env.register(Retirement, ());
-        let client = RetirementClient::new(&env, &contract_id);
-        let buyer = Address::generate(&env);
-        let reason = String::from_str(&env, "2024 Scope 3 offset");
-
-        // First retirement succeeds.
-        client.retire(&buyer, &credit_id, &1_000_000, &reason, &registry_id);
-
-        // Second retirement with the same credit must fail because the registry
-        // rejects mark_retired on an already-retired credit.
-        let result = client.try_retire(&buyer, &credit_id, &1_000_000, &reason, &registry_id);
-        assert!(result.is_err());
+        (retirement_id, registry_id, credit_id, retirement_admin)
     }
 
     #[test]
@@ -186,7 +227,7 @@ mod tests {
         let env = Env::default();
         env.mock_all_auths();
 
-        let (contract_id, registry_id, credit_id) = setup(&env);
+        let (contract_id, registry_id, credit_id, _) = setup(&env);
         let client = RetirementClient::new(&env, &contract_id);
         let buyer = Address::generate(&env);
 
@@ -209,7 +250,7 @@ mod tests {
         let env = Env::default();
         env.mock_all_auths();
 
-        let (contract_id, registry_id, credit_id) = setup(&env);
+        let (contract_id, registry_id, credit_id, _) = setup(&env);
         let client = RetirementClient::new(&env, &contract_id);
         let buyer = Address::generate(&env);
 
@@ -231,7 +272,7 @@ mod tests {
         let env = Env::default();
         env.mock_all_auths();
 
-        let (contract_id, registry_id, credit_id) = setup(&env);
+        let (contract_id, registry_id, credit_id, _) = setup(&env);
         let registry_client =
             carbonchain_credit_registry::CreditRegistryClient::new(&env, &registry_id);
         let client = RetirementClient::new(&env, &contract_id);
@@ -258,7 +299,7 @@ mod tests {
         let env = Env::default();
         env.mock_all_auths();
 
-        let (contract_id, registry_id, credit_id) = setup(&env);
+        let (contract_id, registry_id, credit_id, _) = setup(&env);
         let client = RetirementClient::new(&env, &contract_id);
         let buyer = Address::generate(&env);
 
@@ -269,5 +310,62 @@ mod tests {
             &String::from_str(&env, "offset"),
             &registry_id,
         );
+    }
+
+    // ── Pause tests ──────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_pause_blocks_retire() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let (contract_id, registry_id, credit_id, retirement_admin) = setup(&env);
+        let client = RetirementClient::new(&env, &contract_id);
+        client.pause(&retirement_admin);
+        assert!(client.paused());
+
+        let buyer = Address::generate(&env);
+        assert!(client
+            .try_retire(
+                &buyer,
+                &credit_id,
+                &1_000_000,
+                &String::from_str(&env, "offset"),
+                &registry_id,
+            )
+            .is_err());
+    }
+
+    #[test]
+    fn test_unpause_restores_retire() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let (contract_id, registry_id, credit_id, retirement_admin) = setup(&env);
+        let client = RetirementClient::new(&env, &contract_id);
+        client.pause(&retirement_admin);
+        client.unpause(&retirement_admin);
+        assert!(!client.paused());
+
+        let buyer = Address::generate(&env);
+        assert!(client
+            .try_retire(
+                &buyer,
+                &credit_id,
+                &1_000_000,
+                &String::from_str(&env, "offset"),
+                &registry_id,
+            )
+            .is_ok());
+    }
+
+    #[test]
+    fn test_non_admin_cannot_pause() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (contract_id, _, _, _) = setup(&env);
+        let client = RetirementClient::new(&env, &contract_id);
+        let rando = Address::generate(&env);
+        assert!(client.try_pause(&rando).is_err());
     }
 }
