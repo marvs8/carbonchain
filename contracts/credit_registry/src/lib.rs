@@ -14,9 +14,13 @@ use crate::storage::{
     get_verifiers, set_verifiers, is_verifier,
     add_credit_to_project, get_credits_by_project,
     set_retirement_contract, get_retirement_contract,
+    set_paused, is_paused,
 };
-use crate::types::{CreditMetadata, CreditStatus};
-use crate::events::{credit_submitted, credit_minted, verifier_added, verifier_removed};
+use crate::types::{CreditMetadata, CreditStatus, DataKey};
+use crate::events::{
+    credit_submitted, credit_minted, verifier_added, verifier_removed,
+    contract_paused, contract_unpaused,
+};
 
 #[contract]
 pub struct CreditRegistry;
@@ -29,9 +33,40 @@ impl CreditRegistry {
         if has_admin(&env) {
             return Err(CarbonChainError::AlreadyInitialized);
         }
+        // Validate that admin is a legitimate, authorised address.
+        // require_auth() will panic for zero/invalid addresses in the Soroban VM.
+        admin.require_auth();
         set_admin(&env, &admin);
         set_retirement_contract(&env, &retirement_contract);
         Ok(())
+    }
+
+    // ── Pause / Unpause ──────────────────────────────────────────────────────
+
+    pub fn pause(env: Env, admin: Address) -> Result<(), CarbonChainError> {
+        let stored_admin = get_admin(&env).ok_or(CarbonChainError::NotInitialized)?;
+        admin.require_auth();
+        if admin != stored_admin {
+            return Err(CarbonChainError::Unauthorized);
+        }
+        set_paused(&env, true);
+        contract_paused(&env, admin);
+        Ok(())
+    }
+
+    pub fn unpause(env: Env, admin: Address) -> Result<(), CarbonChainError> {
+        let stored_admin = get_admin(&env).ok_or(CarbonChainError::NotInitialized)?;
+        admin.require_auth();
+        if admin != stored_admin {
+            return Err(CarbonChainError::Unauthorized);
+        }
+        set_paused(&env, false);
+        contract_unpaused(&env, admin);
+        Ok(())
+    }
+
+    pub fn paused(env: Env) -> bool {
+        is_paused(&env)
     }
 
     // ── Verifier management ──────────────────────────────────────────────────
@@ -116,6 +151,9 @@ impl CreditRegistry {
         if !has_admin(&env) {
             return Err(CarbonChainError::NotInitialized);
         }
+        if is_paused(&env) {
+            return Err(CarbonChainError::ContractPaused);
+        }
         issuer.require_auth();
         if tonnes <= 0 {
             return Err(CarbonChainError::InvalidTonnes);
@@ -126,8 +164,8 @@ impl CreditRegistry {
         }
 
         // Include a per-contract nonce so two credits for the same project get distinct IDs.
-        let nonce: u64 = env.storage().instance().get(&crate::types::DataKey::CreditNonce).unwrap_or(0u64);
-        env.storage().instance().set(&crate::types::DataKey::CreditNonce, &(nonce + 1));
+        let nonce: u64 = env.storage().instance().get(&DataKey::CreditNonce).unwrap_or(0u64);
+        env.storage().instance().set(&DataKey::CreditNonce, &(nonce + 1));
         let mut preimage = project_id.clone().to_xdr(&env);
         preimage.append(&nonce.to_xdr(&env));
         let id: BytesN<32> = env.crypto().sha256(&preimage).into();
@@ -151,6 +189,9 @@ impl CreditRegistry {
     }
 
     pub fn approve_and_mint(env: Env, verifier: Address, credit_id: BytesN<32>) -> Result<(), CarbonChainError> {
+        if is_paused(&env) {
+            return Err(CarbonChainError::ContractPaused);
+        }
         verifier.require_auth();
         if !is_verifier(&env, &verifier) {
             return Err(CarbonChainError::Unauthorized);
@@ -166,6 +207,9 @@ impl CreditRegistry {
     }
 
     pub fn flag_credit(env: Env, verifier: Address, credit_id: BytesN<32>, reason: String) -> Result<(), CarbonChainError> {
+        if is_paused(&env) {
+            return Err(CarbonChainError::ContractPaused);
+        }
         verifier.require_auth();
         if !is_verifier(&env, &verifier) {
             return Err(CarbonChainError::Unauthorized);
@@ -181,6 +225,9 @@ impl CreditRegistry {
     }
 
     pub fn mark_retired(env: Env, credit_id: BytesN<32>) -> Result<(), CarbonChainError> {
+        if is_paused(&env) {
+            return Err(CarbonChainError::ContractPaused);
+        }
         // Only the registered retirement contract may call this.
         let retirement_contract = get_retirement_contract(&env)
             .ok_or(CarbonChainError::NotInitialized)?;
@@ -467,5 +514,61 @@ mod tests {
         let fake = Address::generate(&env);
         let result = client.try_approve_and_mint(&fake, &id);
         assert!(result.is_err());
+    }
+
+    // ── Pause tests ──────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_pause_blocks_submit_credit() {
+        let (env, client, admin, _) = setup();
+        client.pause(&admin);
+        assert!(client.paused());
+        let issuer = Address::generate(&env);
+        let result = client.try_submit_credit(
+            &issuer,
+            &String::from_str(&env, "PROJ-001"),
+            &2024,
+            &String::from_str(&env, "VCS"),
+            &String::from_str(&env, "NG"),
+            &1_000_000,
+            &String::from_str(&env, "bafybei123"),
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_unpause_restores_submit_credit() {
+        let (env, client, admin, _) = setup();
+        client.pause(&admin);
+        client.unpause(&admin);
+        assert!(!client.paused());
+        let issuer = Address::generate(&env);
+        let result = client.try_submit_credit(
+            &issuer,
+            &String::from_str(&env, "PROJ-001"),
+            &2024,
+            &String::from_str(&env, "VCS"),
+            &String::from_str(&env, "NG"),
+            &1_000_000,
+            &String::from_str(&env, "bafybei123"),
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_pause_blocks_approve_and_mint() {
+        let (env, client, admin, verifier) = setup();
+        client.register_verifier(&admin, &verifier);
+        let issuer = Address::generate(&env);
+        let id = submit_test_credit(&env, &client, &issuer);
+        client.pause(&admin);
+        assert!(client.try_approve_and_mint(&verifier, &id).is_err());
+    }
+
+    #[test]
+    fn test_non_admin_cannot_pause() {
+        let (env, client, _, _) = setup();
+        let rando = Address::generate(&env);
+        assert!(client.try_pause(&rando).is_err());
     }
 }

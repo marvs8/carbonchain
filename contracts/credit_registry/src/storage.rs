@@ -58,3 +58,11 @@ pub fn set_retirement_contract(env: &Env, addr: &Address) {
 pub fn get_retirement_contract(env: &Env) -> Option<Address> {
     env.storage().instance().get(&DataKey::RetirementContract)
 }
+
+pub fn set_paused(env: &Env, paused: bool) {
+    env.storage().instance().set(&DataKey::Paused, &paused);
+}
+
+pub fn is_paused(env: &Env) -> bool {
+    env.storage().instance().get(&DataKey::Paused).unwrap_or(false)
+}
