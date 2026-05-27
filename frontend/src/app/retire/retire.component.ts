@@ -6,20 +6,21 @@ import { AuthService } from '../core/services/auth.service';
 import { StellarWalletService } from '../core/services/stellar-wallet.service';
 import { ApiService } from '../core/services/api.service';
 import { ConnectWalletComponent } from '../core/components/connect-wallet.component';
+import { TranslatePipe } from '../core/pipes/translate.pipe';
 
 type Step = 'form' | 'confirm' | 'success' | 'error';
 
 @Component({
   selector: 'app-retire',
   standalone: true,
-  imports: [CommonModule, FormsModule, ConnectWalletComponent],
+  imports: [CommonModule, FormsModule, ConnectWalletComponent, TranslatePipe],
   template: `
     <div class="retire-wizard">
-      <h1>Retire a Credit</h1>
+      <h1>{{ 'retire.title' | translate }}</h1>
 
       @if (!auth.isAuthenticated()) {
         <div class="auth-prompt">
-          <p>Connect your wallet to retire a credit.</p>
+          <p>{{ 'retire.walletPrompt' | translate }}</p>
           <app-connect-wallet />
         </div>
       } @else {
@@ -27,36 +28,36 @@ type Step = 'form' | 'confirm' | 'success' | 'error';
         @if (step() === 'form') {
           <form class="wizard-form" (ngSubmit)="goConfirm()" #f="ngForm">
             <label>
-              Credit ID (hex)
+              {{ 'retire.creditId' | translate }}
               <input name="creditId" [(ngModel)]="creditId" required placeholder="037176a1…" />
             </label>
             <label>
-              Tonnes (in kg units, e.g. 1000000 = 1 tonne)
+              {{ 'retire.tonnes' | translate }}
               <input name="tonnes" [(ngModel)]="tonnes" required type="number" min="1" placeholder="1000000" />
             </label>
             <label>
-              Reason
+              {{ 'retire.reason' | translate }}
               <input name="reason" [(ngModel)]="reason" required placeholder="2024 Scope 3 offset" />
             </label>
             <button class="btn btn-primary" type="submit" [disabled]="f.invalid">
-              Review →
+              {{ 'retire.review' | translate }}
             </button>
           </form>
         }
 
         @if (step() === 'confirm') {
           <div class="confirm-box">
-            <h2>Confirm Retirement</h2>
+            <h2>{{ 'retire.confirmTitle' | translate }}</h2>
             <dl>
-              <dt>Credit ID</dt><dd class="mono">{{ creditId }}</dd>
-              <dt>Tonnes</dt><dd>{{ formatTonnes(tonnes) }}</dd>
-              <dt>Reason</dt><dd>{{ reason }}</dd>
-              <dt>Wallet</dt><dd class="mono">{{ wallet.publicKey() }}</dd>
+              <dt>{{ 'retire.creditId' | translate }}</dt><dd class="mono">{{ creditId }}</dd>
+              <dt>{{ 'retire.tonnes' | translate }}</dt><dd>{{ formatTonnes(tonnes) }}</dd>
+              <dt>{{ 'retire.reason' | translate }}</dt><dd>{{ reason }}</dd>
+              <dt>{{ 'retire.wallet' | translate }}</dt><dd class="mono">{{ wallet.publicKey() }}</dd>
             </dl>
             <div class="actions">
-              <button class="btn btn-outline" (click)="step.set('form')">← Back</button>
+              <button class="btn btn-outline" (click)="step.set('form')">{{ 'retire.back' | translate }}</button>
               <button class="btn btn-danger" [disabled]="submitting()" (click)="submit()">
-                {{ submitting() ? 'Submitting…' : 'Confirm Retirement' }}
+                {{ submitting() ? ('retire.submitting' | translate) : ('retire.confirm' | translate) }}
               </button>
             </div>
           </div>
@@ -64,18 +65,18 @@ type Step = 'form' | 'confirm' | 'success' | 'error';
 
         @if (step() === 'success') {
           <div class="result success">
-            <h2>✅ Credit Retired</h2>
-            <p>Retirement ID:</p>
+            <h2>{{ 'retire.successTitle' | translate }}</h2>
+            <p>{{ 'retire.retirementId' | translate }}</p>
             <code>{{ retirementId() }}</code>
-            <button class="btn btn-outline" (click)="reset()">Retire another</button>
+            <button class="btn btn-outline" (click)="reset()">{{ 'retire.retireAnother' | translate }}</button>
           </div>
         }
 
         @if (step() === 'error') {
           <div class="result error-box">
-            <h2>❌ Retirement Failed</h2>
+            <h2>{{ 'retire.errorTitle' | translate }}</h2>
             <p>{{ errorMsg() }}</p>
-            <button class="btn btn-outline" (click)="step.set('confirm')">Try again</button>
+            <button class="btn btn-outline" (click)="step.set('confirm')">{{ 'retire.tryAgain' | translate }}</button>
           </div>
         }
 
@@ -111,12 +112,10 @@ export class RetireComponent {
   protected readonly wallet = inject(StellarWalletService);
   private readonly api = inject(ApiService);
 
-  // form fields
   creditId = '';
   tonnes = 1_000_000;
   reason = '';
 
-  // wizard state
   readonly step = signal<Step>('form');
   readonly submitting = signal(false);
   readonly retirementId = signal<string | null>(null);

@@ -2,11 +2,12 @@ import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { AuthService } from '../services/auth.service';
 import { StellarWalletService } from '../services/stellar-wallet.service';
+import { TranslatePipe } from '../pipes/translate.pipe';
 
 @Component({
   selector: 'app-connect-wallet',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, TranslatePipe],
   template: `
     <div class="wallet-connect">
       @if (auth.isAuthenticated()) {
@@ -14,12 +15,12 @@ import { StellarWalletService } from '../services/stellar-wallet.service';
           <span class="pubkey" [title]="wallet.publicKey()!">
             {{ wallet.publicKey()! | slice:0:6 }}…{{ wallet.publicKey()! | slice:-4 }}
           </span>
-          <button class="btn btn-outline" (click)="auth.logout()">Disconnect</button>
+          <button class="btn btn-outline" (click)="auth.logout()">{{ 'wallet.disconnect' | translate }}</button>
         </div>
       } @else {
         @if (!wallet.isFreighterInstalled) {
           <a class="btn btn-primary" href="https://freighter.app" target="_blank" rel="noopener">
-            Install Freighter
+            {{ 'wallet.install' | translate }}
           </a>
         } @else {
           <button
@@ -28,9 +29,9 @@ import { StellarWalletService } from '../services/stellar-wallet.service';
             (click)="login()"
           >
             @if (auth.authState() === 'authenticating') {
-              Connecting…
+              {{ 'wallet.connecting' | translate }}
             } @else {
-              Connect Wallet
+              {{ 'wallet.connect' | translate }}
             }
           </button>
         }

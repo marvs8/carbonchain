@@ -4,41 +4,42 @@ import { MarketplaceStore } from '../core/store/marketplace.store';
 import { AuthService } from '../core/services/auth.service';
 import { StellarWalletService } from '../core/services/stellar-wallet.service';
 import { ConnectWalletComponent } from '../core/components/connect-wallet.component';
+import { TranslatePipe } from '../core/pipes/translate.pipe';
 
 @Component({
   selector: 'app-marketplace',
   standalone: true,
-  imports: [CommonModule, ConnectWalletComponent],
+  imports: [CommonModule, ConnectWalletComponent, TranslatePipe],
   template: `
     <div class="marketplace">
-      <h1>Marketplace</h1>
+      <h1>{{ 'marketplace.title' | translate }}</h1>
 
       @if (!auth.isAuthenticated()) {
         <div class="auth-prompt">
-          <p>Connect your wallet to browse your listings.</p>
+          <p>{{ 'marketplace.walletPrompt' | translate }}</p>
           <app-connect-wallet />
         </div>
       } @else {
         <div class="toolbar">
-          <span class="subtitle">Listings for {{ wallet.publicKey()! | slice:0:8 }}…</span>
-          <button class="btn btn-primary" (click)="refresh()">Refresh</button>
+          <span class="subtitle">{{ 'marketplace.listingsFor' | translate }} {{ wallet.publicKey()! | slice:0:8 }}…</span>
+          <button class="btn btn-primary" (click)="refresh()">{{ 'marketplace.refresh' | translate }}</button>
         </div>
 
         @if (store.isLoading()) {
-          <p class="status">Loading offers…</p>
+          <p class="status">{{ 'marketplace.loading' | translate }}</p>
         } @else if (store.error()) {
           <p class="error">{{ store.error() }}</p>
         } @else if (store.activeOffers().length === 0) {
-          <p class="status">No active listings found.</p>
+          <p class="status">{{ 'marketplace.noListings' | translate }}</p>
         } @else {
           <table class="offer-table">
             <thead>
               <tr>
-                <th>ID</th>
-                <th>Credit ID</th>
-                <th>Tonnes</th>
-                <th>Price (XLM)</th>
-                <th>Status</th>
+                <th>{{ 'marketplace.col.id' | translate }}</th>
+                <th>{{ 'marketplace.col.creditId' | translate }}</th>
+                <th>{{ 'marketplace.col.tonnes' | translate }}</th>
+                <th>{{ 'marketplace.col.price' | translate }}</th>
+                <th>{{ 'marketplace.col.status' | translate }}</th>
               </tr>
             </thead>
             <tbody>
