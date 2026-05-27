@@ -16,6 +16,7 @@ export interface CertificateVerification {
   ledger_sequence?: number;
 }
 
+@ApiTags('retirement')
 @Controller('retirement')
 export class RetirementController {
   constructor(private readonly retirementService: RetirementService) {}

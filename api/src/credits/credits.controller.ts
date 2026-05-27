@@ -4,6 +4,7 @@ import { CreditMetadata } from '../shared';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PageResult } from './credit.repository';
 
+@ApiTags('credits')
 @Controller('credits')
 export class CreditsController {
   constructor(private readonly creditsService: CreditsService) {}
@@ -50,6 +51,7 @@ export class CreditsController {
     return this.creditsService.getCredit(id);
   }
 
+  @ApiOperation({ summary: 'List credits by project' })
   @Get('project/:projectId')
   async listByProject(
     @Param('projectId') projectId: string,
