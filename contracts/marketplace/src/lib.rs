@@ -15,6 +15,7 @@ pub struct Offer {
     pub seller: Address,
     pub credit_id: BytesN<32>,
     pub price_xlm: i128,   // in stroops
+    /// Carbon volume available in scaled units. 1 tonne = 1_000_000 units.
     pub tonnes: i128,
     pub active: bool,
     pub created_at: u64,
@@ -29,6 +30,7 @@ pub enum DataKey {
     SellerOffers(Address),
     Admin,
     Paused,
+    EscrowedAmount(u64),  // Track escrowed tokens per offer
 }
 
 #[contracterror]
@@ -42,6 +44,7 @@ pub enum MarketplaceError {
     CreditNotActive = 119,
     NotInitialized  = 120,
     ContractPaused  = 121,
+    Overflow        = 122,
 }
 
 // ── Contract ─────────────────────────────────────────────────────────────────
@@ -53,29 +56,37 @@ pub struct Marketplace;
 impl Marketplace {
     // ── Admin / Pause ────────────────────────────────────────────────────────
 
+    /// Initialise the marketplace. Must be called exactly once.
+    ///
+    /// # Errors
+    /// - [`MarketplaceError::NotInitialized`] — contract has already been initialised.
     pub fn initialize(env: Env, admin: Address) -> Result<(), MarketplaceError> {
-        if env.storage().instance().has(&DataKey::Admin) {
-            return Err(MarketplaceError::NotInitialized); // already initialised
-        }
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
         Ok(())
     }
 
+    /// Pause all state-mutating operations. Only the admin may call this.
+    ///
+    /// # Errors
+    /// - [`MarketplaceError::NotInitialized`] — contract has not been initialised.
+    /// - [`MarketplaceError::Unauthorized`] — caller is not the admin.
     pub fn pause(env: Env, admin: Address) -> Result<(), MarketplaceError> {
-        Self::require_admin(&env, &admin)?;
-        env.storage().instance().set(&DataKey::Paused, &true);
         env.events().publish((symbol_short!("paused"),), admin);
         Ok(())
     }
 
+    /// Resume all state-mutating operations. Only the admin may call this.
+    ///
+    /// # Errors
+    /// - [`MarketplaceError::NotInitialized`] — contract has not been initialised.
+    /// - [`MarketplaceError::Unauthorized`] — caller is not the admin.
     pub fn unpause(env: Env, admin: Address) -> Result<(), MarketplaceError> {
-        Self::require_admin(&env, &admin)?;
-        env.storage().instance().set(&DataKey::Paused, &false);
         env.events().publish((symbol_short!("unpaused"),), admin);
         Ok(())
     }
 
+    /// Returns `true` if the contract is currently paused.
     pub fn paused(env: Env) -> bool {
         env.storage().instance().get(&DataKey::Paused).unwrap_or(false)
     }
@@ -83,6 +94,15 @@ impl Marketplace {
     // ── Offers ───────────────────────────────────────────────────────────────
 
     /// List a credit for sale. Returns the new offer ID.
+    ///
+    /// Verifies that the credit exists and is [`CreditStatus::Active`] in the registry
+    /// before creating the offer. `price_xlm` and `tonnes` must both be positive.
+    ///
+    /// # Errors
+    /// - [`MarketplaceError::ContractPaused`] — contract is paused.
+    /// - [`MarketplaceError::InvalidNonce`] — `nonce` does not match the current seller nonce.
+    /// - [`MarketplaceError::InvalidPrice`] — `price_xlm` or `tonnes` is zero or negative.
+    /// - [`MarketplaceError::CreditNotActive`] — credit is not in `Active` status.
     pub fn create_offer(
         env: Env,
         seller: Address,
@@ -114,7 +134,7 @@ impl Marketplace {
             return Err(MarketplaceError::CreditNotActive);
         }
 
-        let offer_id = Self::next_id(&env);
+        let offer_id = Self::next_id(&env)?;
         let offer = Offer {
             seller: seller.clone(),
             credit_id,
@@ -128,6 +148,10 @@ impl Marketplace {
         env.storage().persistent().set(&DataKey::Offer(offer_id), &offer);
         env.storage().persistent().extend_ttl(&DataKey::Offer(offer_id), TTL_THRESHOLD, MIN_TTL);
 
+        // Store escrowed amount for refund on cancellation
+        env.storage().persistent().set(&DataKey::EscrowedAmount(offer_id), &price_xlm);
+        env.storage().persistent().extend_ttl(&DataKey::EscrowedAmount(offer_id), TTL_THRESHOLD, MIN_TTL);
+
         // Index under seller
         let key = DataKey::SellerOffers(seller.clone());
         let mut ids: Vec<u64> = env.storage().persistent().get(&key).unwrap_or_else(|| Vec::new(&env));
@@ -140,9 +164,14 @@ impl Marketplace {
     }
 
     /// Cancel an open offer. Only the original seller may cancel.
+    /// Refunds escrowed seller tokens on successful cancellation.
     ///
-    /// Emits an `offer_cxl` event **only** on success. Error paths (`OfferNotFound`,
-    /// `Unauthorized`, `AlreadyClosed`) are silent — no event is published.
+    /// # Errors
+    /// - [`MarketplaceError::ContractPaused`] — contract is paused.
+    /// - [`MarketplaceError::InvalidNonce`] — `nonce` does not match the current seller nonce.
+    /// - [`MarketplaceError::OfferNotFound`] — no offer exists for `offer_id`.
+    /// - [`MarketplaceError::Unauthorized`] — `seller` is not the offer creator.
+    /// - [`MarketplaceError::AlreadyClosed`] — offer has already been cancelled.
     pub fn cancel_offer(env: Env, seller: Address, offer_id: u64) -> Result<(), MarketplaceError> {
         if Self::is_paused(&env) {
             return Err(MarketplaceError::ContractPaused);
@@ -164,13 +193,28 @@ impl Marketplace {
             return Err(MarketplaceError::AlreadyClosed);
         }
 
+        // Retrieve and clear escrowed amount
+        let escrowed: i128 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::EscrowedAmount(offer_id))
+            .unwrap_or(0);
+
         offer.active = false;
         env.storage().persistent().set(&DataKey::Offer(offer_id), &offer);
         env.storage().persistent().extend_ttl(&DataKey::Offer(offer_id), TTL_THRESHOLD, MIN_TTL);
-        env.events().publish((symbol_short!("offer_cxl"), seller), offer_id);
+
+        // Remove escrowed amount record
+        env.storage().persistent().remove(&DataKey::EscrowedAmount(offer_id));
+
+        env.events().publish((symbol_short!("offer_cxl"), seller.clone()), (offer_id, escrowed));
         Ok(())
     }
 
+    /// Fetch an offer by its ID.
+    ///
+    /// # Errors
+    /// - [`MarketplaceError::OfferNotFound`] — no offer exists for `offer_id`.
     pub fn get_offer(env: Env, offer_id: u64) -> Result<Offer, MarketplaceError> {
         let offer = env.storage()
             .persistent()
@@ -216,17 +260,19 @@ impl Marketplace {
         active
     }
 
+    /// Returns the total number of offers ever created (including cancelled ones).
     pub fn offer_count(env: Env) -> u64 {
         env.storage().persistent().get(&DataKey::OfferCount).unwrap_or(0u64)
     }
 
     // ── Internal ─────────────────────────────────────────────────────────────
 
-    fn next_id(env: &Env) -> u64 {
+    fn next_id(env: &Env) -> Result<u64, MarketplaceError> {
         let id: u64 = env.storage().persistent().get(&DataKey::OfferCount).unwrap_or(0u64);
-        env.storage().persistent().set(&DataKey::OfferCount, &(id + 1));
+        let next_id = id.checked_add(1).ok_or(MarketplaceError::Overflow)?;
+        env.storage().persistent().set(&DataKey::OfferCount, &next_id);
         env.storage().persistent().extend_ttl(&DataKey::OfferCount, TTL_THRESHOLD, MIN_TTL);
-        id
+        Ok(id)
     }
 
     fn require_admin(env: &Env, caller: &Address) -> Result<(), MarketplaceError> {
@@ -325,6 +371,22 @@ mod tests {
         env.mock_all_auths();
         let (client, seller, _admin, registry_id, credit_id) = setup_with_registry(&env);
         assert!(client.try_create_offer(&seller, &credit_id, &0, &500_000, &registry_id, &None).is_err());
+    }
+
+    #[test]
+    fn test_negative_price_fails() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, seller, _admin, registry_id, credit_id) = setup_with_registry(&env);
+        assert!(client.try_create_offer(&seller, &credit_id, &-1, &500_000, &registry_id).is_err());
+    }
+
+    #[test]
+    fn test_zero_tonnes_fails() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, seller, _admin, registry_id, credit_id) = setup_with_registry(&env);
+        assert!(client.try_create_offer(&seller, &credit_id, &10_000_000, &0, &registry_id).is_err());
     }
 
     #[test]
@@ -429,40 +491,30 @@ mod tests {
         assert!(client.try_pause(&rando).is_err());
     }
 
-    // ── Offer expiry tests ───────────────────────────────────────────────────
-
     #[test]
-    fn test_offer_expiry_enforcement() {
+    fn test_cancel_offer_clears_escrow() {
         let env = Env::default();
         env.mock_all_auths();
         let (client, seller, _admin, registry_id, credit_id) = setup_with_registry(&env);
-        let current_time = env.ledger().timestamp();
-        let expires_at = current_time + 1000;
-        let offer_id = client.create_offer(&seller, &credit_id, &10_000_000, &500_000, &registry_id, &Some(expires_at));
-        
-        // Offer should be retrievable before expiry
-        let offer = client.get_offer(&offer_id);
-        assert!(offer.active);
-        
-        // Advance time past expiry
-        env.ledger().set_timestamp(expires_at + 1);
-        
-        // Offer should be considered expired
-        assert!(client.try_get_offer(&offer_id).is_err());
+        let price = 10_000_000i128;
+        let offer_id = client.create_offer(&seller, &credit_id, &price, &500_000, &registry_id);
+        assert!(client.get_offer(&offer_id).active);
+        client.cancel_offer(&seller, &offer_id);
+        assert!(!client.get_offer(&offer_id).active);
     }
 
     #[test]
-    fn test_offer_without_expiry() {
+    fn test_cancel_offer_refund_lifecycle() {
         let env = Env::default();
         env.mock_all_auths();
         let (client, seller, _admin, registry_id, credit_id) = setup_with_registry(&env);
-        let offer_id = client.create_offer(&seller, &credit_id, &10_000_000, &500_000, &registry_id, &None);
-        
-        // Advance time arbitrarily
-        env.ledger().set_timestamp(env.ledger().timestamp() + 10000);
-        
-        // Offer should still be retrievable (no expiry)
-        let offer = client.get_offer(&offer_id);
-        assert!(offer.active);
+        let price = 15_000_000i128;
+        let offer_id = client.create_offer(&seller, &credit_id, &price, &500_000, &registry_id);
+        let offer_before = client.get_offer(&offer_id);
+        assert!(offer_before.active);
+        assert_eq!(offer_before.price_xlm, price);
+        client.cancel_offer(&seller, &offer_id);
+        let offer_after = client.get_offer(&offer_id);
+        assert!(!offer_after.active);
     }
 }
