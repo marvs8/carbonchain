@@ -18,6 +18,7 @@ pub struct Offer {
     pub tonnes: i128,
     pub active: bool,
     pub created_at: u64,
+    pub expires_at: Option<u64>,
 }
 
 #[derive(Clone)]
@@ -89,6 +90,7 @@ impl Marketplace {
         price_xlm: i128,
         tonnes: i128,
         registry_id: Address,
+        expires_at: Option<u64>,
         nonce: u64,
     ) -> Result<u64, MarketplaceError> {
         if Self::is_paused(&env) {
@@ -120,6 +122,7 @@ impl Marketplace {
             tonnes,
             active: true,
             created_at: env.ledger().timestamp(),
+            expires_at,
         };
 
         env.storage().persistent().set(&DataKey::Offer(offer_id), &offer);
@@ -169,10 +172,19 @@ impl Marketplace {
     }
 
     pub fn get_offer(env: Env, offer_id: u64) -> Result<Offer, MarketplaceError> {
-        env.storage()
+        let offer = env.storage()
             .persistent()
             .get(&DataKey::Offer(offer_id))
-            .ok_or(MarketplaceError::OfferNotFound)
+            .ok_or(MarketplaceError::OfferNotFound)?;
+        
+        // Check if offer has expired
+        if let Some(expires_at) = offer.expires_at {
+            if env.ledger().timestamp() > expires_at {
+                return Err(MarketplaceError::AlreadyClosed);
+            }
+        }
+        
+        Ok(offer)
     }
 
     /// Returns all offer IDs for a seller (including cancelled ones).
@@ -280,7 +292,7 @@ mod tests {
         let env = Env::default();
         env.mock_all_auths();
         let (client, seller, _admin, registry_id, credit_id) = setup_with_registry(&env);
-        let offer_id = client.create_offer(&seller, &credit_id, &10_000_000, &500_000, &registry_id);
+        let offer_id = client.create_offer(&seller, &credit_id, &10_000_000, &500_000, &registry_id, &None);
         assert_eq!(offer_id, 0);
         let offer = client.get_offer(&offer_id);
         assert!(offer.active);
@@ -292,7 +304,7 @@ mod tests {
         let env = Env::default();
         env.mock_all_auths();
         let (client, seller, _admin, registry_id, credit_id) = setup_with_registry(&env);
-        let offer_id = client.create_offer(&seller, &credit_id, &10_000_000, &500_000, &registry_id);
+        let offer_id = client.create_offer(&seller, &credit_id, &10_000_000, &500_000, &registry_id, &None);
         client.cancel_offer(&seller, &offer_id);
         assert!(!client.get_offer(&offer_id).active);
     }
@@ -302,7 +314,7 @@ mod tests {
         let env = Env::default();
         env.mock_all_auths();
         let (client, seller, _admin, registry_id, credit_id) = setup_with_registry(&env);
-        let offer_id = client.create_offer(&seller, &credit_id, &10_000_000, &500_000, &registry_id);
+        let offer_id = client.create_offer(&seller, &credit_id, &10_000_000, &500_000, &registry_id, &None);
         client.cancel_offer(&seller, &offer_id);
         assert!(client.try_cancel_offer(&seller, &offer_id).is_err());
     }
@@ -312,7 +324,7 @@ mod tests {
         let env = Env::default();
         env.mock_all_auths();
         let (client, seller, _admin, registry_id, credit_id) = setup_with_registry(&env);
-        assert!(client.try_create_offer(&seller, &credit_id, &0, &500_000, &registry_id).is_err());
+        assert!(client.try_create_offer(&seller, &credit_id, &0, &500_000, &registry_id, &None).is_err());
     }
 
     #[test]
@@ -320,8 +332,8 @@ mod tests {
         let env = Env::default();
         env.mock_all_auths();
         let (client, seller, _admin, registry_id, credit_id) = setup_with_registry(&env);
-        client.create_offer(&seller, &credit_id, &10_000_000, &500_000, &registry_id);
-        client.create_offer(&seller, &credit_id, &20_000_000, &250_000, &registry_id);
+        client.create_offer(&seller, &credit_id, &10_000_000, &500_000, &registry_id, &None);
+        client.create_offer(&seller, &credit_id, &20_000_000, &250_000, &registry_id, &None);
         assert_eq!(client.get_offers_by_seller(&seller).len(), 2);
     }
 
@@ -330,8 +342,8 @@ mod tests {
         let env = Env::default();
         env.mock_all_auths();
         let (client, seller, _admin, registry_id, credit_id) = setup_with_registry(&env);
-        client.create_offer(&seller, &credit_id, &10_000_000, &500_000, &registry_id);
-        client.create_offer(&seller, &credit_id, &20_000_000, &250_000, &registry_id);
+        client.create_offer(&seller, &credit_id, &10_000_000, &500_000, &registry_id, &None);
+        client.create_offer(&seller, &credit_id, &20_000_000, &250_000, &registry_id, &None);
         assert_eq!(client.offer_count(), 2);
     }
 
@@ -340,7 +352,7 @@ mod tests {
         let env = Env::default();
         env.mock_all_auths();
         let (client, seller, _admin, registry_id, credit_id) = setup_with_registry(&env);
-        let offer_id = client.create_offer(&seller, &credit_id, &10_000_000, &500_000, &registry_id);
+        let offer_id = client.create_offer(&seller, &credit_id, &10_000_000, &500_000, &registry_id, &None);
         let other = Address::generate(&env);
         let ononce = client.nonce(&other);
         assert!(client.try_cancel_offer(&other, &offer_id, &ononce).is_err());
@@ -353,8 +365,8 @@ mod tests {
         let env = Env::default();
         env.mock_all_auths();
         let (client, seller, _admin, registry_id, credit_id) = setup_with_registry(&env);
-        let id0 = client.create_offer(&seller, &credit_id, &10_000_000, &500_000, &registry_id);
-        let id1 = client.create_offer(&seller, &credit_id, &20_000_000, &250_000, &registry_id);
+        let id0 = client.create_offer(&seller, &credit_id, &10_000_000, &500_000, &registry_id, &None);
+        let id1 = client.create_offer(&seller, &credit_id, &20_000_000, &250_000, &registry_id, &None);
         // Cancel the first offer.
         client.cancel_offer(&seller, &id0);
         // get_offers_by_seller still returns both.
@@ -370,7 +382,7 @@ mod tests {
         let env = Env::default();
         env.mock_all_auths();
         let (client, seller, _admin, registry_id, credit_id) = setup_with_registry(&env);
-        let id0 = client.create_offer(&seller, &credit_id, &10_000_000, &500_000, &registry_id);
+        let id0 = client.create_offer(&seller, &credit_id, &10_000_000, &500_000, &registry_id, &None);
         client.cancel_offer(&seller, &id0);
         assert_eq!(client.get_active_offers_by_seller(&seller).len(), 0);
     }
@@ -384,7 +396,7 @@ mod tests {
         let (client, seller, admin, registry_id, credit_id) = setup_with_registry(&env);
         client.pause(&admin);
         assert!(client.paused());
-        assert!(client.try_create_offer(&seller, &credit_id, &10_000_000, &500_000, &registry_id).is_err());
+        assert!(client.try_create_offer(&seller, &credit_id, &10_000_000, &500_000, &registry_id, &None).is_err());
     }
 
     #[test]
@@ -395,7 +407,7 @@ mod tests {
         client.pause(&admin);
         client.unpause(&admin);
         assert!(!client.paused());
-        assert!(client.try_create_offer(&seller, &credit_id, &10_000_000, &500_000, &registry_id).is_ok());
+        assert!(client.try_create_offer(&seller, &credit_id, &10_000_000, &500_000, &registry_id, &None).is_ok());
     }
 
     #[test]
@@ -403,7 +415,7 @@ mod tests {
         let env = Env::default();
         env.mock_all_auths();
         let (client, seller, admin, registry_id, credit_id) = setup_with_registry(&env);
-        let offer_id = client.create_offer(&seller, &credit_id, &10_000_000, &500_000, &registry_id);
+        let offer_id = client.create_offer(&seller, &credit_id, &10_000_000, &500_000, &registry_id, &None);
         client.pause(&admin);
         assert!(client.try_cancel_offer(&seller, &offer_id).is_err());
     }
@@ -415,5 +427,42 @@ mod tests {
         let (client, _, _, _, _) = setup_with_registry(&env);
         let rando = Address::generate(&env);
         assert!(client.try_pause(&rando).is_err());
+    }
+
+    // ── Offer expiry tests ───────────────────────────────────────────────────
+
+    #[test]
+    fn test_offer_expiry_enforcement() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, seller, _admin, registry_id, credit_id) = setup_with_registry(&env);
+        let current_time = env.ledger().timestamp();
+        let expires_at = current_time + 1000;
+        let offer_id = client.create_offer(&seller, &credit_id, &10_000_000, &500_000, &registry_id, &Some(expires_at));
+        
+        // Offer should be retrievable before expiry
+        let offer = client.get_offer(&offer_id);
+        assert!(offer.active);
+        
+        // Advance time past expiry
+        env.ledger().set_timestamp(expires_at + 1);
+        
+        // Offer should be considered expired
+        assert!(client.try_get_offer(&offer_id).is_err());
+    }
+
+    #[test]
+    fn test_offer_without_expiry() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, seller, _admin, registry_id, credit_id) = setup_with_registry(&env);
+        let offer_id = client.create_offer(&seller, &credit_id, &10_000_000, &500_000, &registry_id, &None);
+        
+        // Advance time arbitrarily
+        env.ledger().set_timestamp(env.ledger().timestamp() + 10000);
+        
+        // Offer should still be retrievable (no expiry)
+        let offer = client.get_offer(&offer_id);
+        assert!(offer.active);
     }
 }
