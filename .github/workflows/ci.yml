@@ -73,4 +73,4 @@ jobs:
       - name: Build
         run: cd frontend && npm run build
       - name: Run Tests
-        run: cd frontend && npm run test -- --no-watch
+        run: cd frontend && npm run test:ci
