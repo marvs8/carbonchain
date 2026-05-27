@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, Body } from '@nestjs/common';
+import { Controller, Get, Post, Param, Body, Query } from '@nestjs/common';
 import { CreditsService, IssueCreditDto } from './credits.service';
 import { CreditMetadata } from '../shared';
 
@@ -9,6 +9,36 @@ export class CreditsController {
   @Post('issue')
   issueCredit(@Body() dto: IssueCreditDto): Promise<{ creditId: string }> {
     return this.creditsService.issueCredit(dto);
+  }
+
+  @Post('bulk')
+  async getBulkCredits(
+    @Body() dto: { ids: string[] },
+  ): Promise<CreditMetadata[]> {
+    return this.creditsService.getBulkCredits(dto.ids);
+  }
+
+  @Get()
+  async listCredits(
+    @Query('methodology') methodology?: string,
+    @Query('geography') geography?: string,
+    @Query('vintage_year') vintageYear?: string,
+    @Query('status') status?: string,
+    @Query('min_tonnes') minTonnes?: string,
+    @Query('max_tonnes') maxTonnes?: string,
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '10',
+  ): Promise<{ data: CreditMetadata[]; total: number; page: number; limit: number }> {
+    return this.creditsService.listCredits({
+      methodology,
+      geography,
+      vintageYear: vintageYear ? parseInt(vintageYear, 10) : undefined,
+      status,
+      minTonnes,
+      maxTonnes,
+      page: parseInt(page, 10),
+      limit: parseInt(limit, 10),
+    });
   }
 
   @Get(':id')

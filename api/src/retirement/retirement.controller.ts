@@ -2,6 +2,18 @@ import { Controller, Post, Get, Param, Body } from '@nestjs/common';
 import { RetirementService, RetireDto } from './retirement.service';
 import { RetirementRecord } from '../shared';
 
+export interface CertificateVerification {
+  id: string;
+  credit_id: string;
+  buyer: string;
+  tonnes_retired: string;
+  reason: string;
+  retired_at: number;
+  tx_hash: string;
+  verified: boolean;
+  ledger_sequence?: number;
+}
+
 @Controller('retirement')
 export class RetirementController {
   constructor(private readonly retirementService: RetirementService) {}
@@ -22,5 +34,13 @@ export class RetirementController {
   @Get('account/:address')
   getByAccount(@Param('address') address: string): Promise<string[]> {
     return this.retirementService.getRetirementsByAccount(address);
+  }
+
+  /** GET /certificates/:id/verify — verify retirement certificate authenticity (public) */
+  @Get('certificates/:id/verify')
+  verifyCertificate(
+    @Param('id') certificateId: string,
+  ): Promise<CertificateVerification> {
+    return this.retirementService.verifyCertificate(certificateId);
   }
 }

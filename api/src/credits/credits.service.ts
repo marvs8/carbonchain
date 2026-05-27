@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment */
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { StellarService } from '../stellar/stellar.service';
 import { StellarKeypairService } from '../stellar/stellar-keypair.service';
@@ -16,10 +16,22 @@ export class IssueCreditDto {
   ipfsHash: string;
 }
 
+interface ListCreditsFilter {
+  methodology?: string;
+  geography?: string;
+  vintageYear?: number;
+  status?: string;
+  minTonnes?: string;
+  maxTonnes?: string;
+  page: number;
+  limit: number;
+}
+
 @Injectable()
 export class CreditsService {
   private readonly logger = new Logger(CreditsService.name);
   private readonly contractId: string;
+  private creditsCache: Map<string, CreditMetadata> = new Map();
 
   constructor(
     private stellarService: StellarService,
@@ -82,6 +94,83 @@ export class CreditsService {
       );
       throw error;
     }
+  }
+
+  async getBulkCredits(creditIds: string[]): Promise<CreditMetadata[]> {
+    if (!creditIds || creditIds.length === 0) {
+      throw new BadRequestException('Credit IDs array cannot be empty');
+    }
+    if (creditIds.length > 100) {
+      throw new BadRequestException('Maximum 100 credits per bulk request');
+    }
+
+    this.logger.log(`Fetching ${creditIds.length} credits in bulk`);
+    const results: CreditMetadata[] = [];
+
+    for (const creditId of creditIds) {
+      try {
+        const credit = await this.getCredit(creditId);
+        results.push(credit);
+      } catch (error: unknown) {
+        this.logger.warn(
+          `Failed to fetch credit ${creditId}: ${(error as Error).message}`,
+        );
+      }
+    }
+
+    return results;
+  }
+
+  async listCredits(
+    filter: ListCreditsFilter,
+  ): Promise<{ data: CreditMetadata[]; total: number; page: number; limit: number }> {
+    this.logger.log(`Listing credits with filters: ${JSON.stringify(filter)}`);
+
+    // For now, return empty results as we don't have a list_all_credits contract method
+    // In production, this would query the blockchain or an indexed database
+    const allCredits: CreditMetadata[] = [];
+
+    // Apply filters
+    let filtered = allCredits;
+
+    if (filter.methodology) {
+      filtered = filtered.filter(
+        (c) => c.methodology.toLowerCase() === filter.methodology?.toLowerCase(),
+      );
+    }
+
+    if (filter.geography) {
+      filtered = filtered.filter(
+        (c) => c.geography.toLowerCase() === filter.geography?.toLowerCase(),
+      );
+    }
+
+    if (filter.vintageYear) {
+      filtered = filtered.filter((c) => c.vintage_year === filter.vintageYear);
+    }
+
+    if (filter.status) {
+      filtered = filtered.filter(
+        (c) => c.status.toLowerCase() === filter.status?.toLowerCase(),
+      );
+    }
+
+    if (filter.minTonnes) {
+      const minVal = BigInt(filter.minTonnes);
+      filtered = filtered.filter((c) => BigInt(c.tonnes) >= minVal);
+    }
+
+    if (filter.maxTonnes) {
+      const maxVal = BigInt(filter.maxTonnes);
+      filtered = filtered.filter((c) => BigInt(c.tonnes) <= maxVal);
+    }
+
+    const total = filtered.length;
+    const start = (filter.page - 1) * filter.limit;
+    const end = start + filter.limit;
+    const data = filtered.slice(start, end);
+
+    return { data, total, page: filter.page, limit: filter.limit };
   }
 
   async listCreditsByProject(projectId: string): Promise<string[]> {

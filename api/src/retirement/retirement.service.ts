@@ -13,6 +13,18 @@ export class RetireDto {
   reason: string;
 }
 
+export interface CertificateVerification {
+  id: string;
+  credit_id: string;
+  buyer: string;
+  tonnes_retired: string;
+  reason: string;
+  retired_at: number;
+  tx_hash: string;
+  verified: boolean;
+  ledger_sequence?: number;
+}
+
 @Injectable()
 export class RetirementService {
   private readonly logger = new Logger(RetirementService.name);
@@ -97,5 +109,41 @@ export class RetirementService {
     if (!retval) return [];
     const native = scValToNative(retval) as Uint8Array[];
     return native.map((b) => Buffer.from(b).toString('hex'));
+  }
+
+  async verifyCertificate(
+    certificateId: string,
+  ): Promise<CertificateVerification> {
+    try {
+      this.logger.log(`Verifying certificate: ${certificateId}`);
+      const retirement = await this.getRetirement(certificateId);
+
+      // Fetch transaction details from Stellar to verify on-chain proof
+      const txHash = await this.stellarService.getTransactionHash(
+        certificateId,
+      );
+      const ledgerSequence = await this.stellarService.getLedgerSequence(
+        certificateId,
+      );
+
+      return {
+        id: retirement.id,
+        credit_id: retirement.credit_id,
+        buyer: retirement.buyer,
+        tonnes_retired: retirement.tonnes_retired,
+        reason: retirement.reason,
+        retired_at: retirement.retired_at,
+        tx_hash: txHash || '',
+        verified: true,
+        ledger_sequence: ledgerSequence,
+      };
+    } catch (error: unknown) {
+      this.logger.error(
+        `Failed to verify certificate ${certificateId}: ${(error as Error).message}`,
+      );
+      throw new NotFoundException(
+        `Certificate ${certificateId} not found or cannot be verified`,
+      );
+    }
   }
 }
