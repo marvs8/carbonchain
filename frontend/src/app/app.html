@@ -5,6 +5,9 @@
     <a routerLink="/marketplace">Marketplace</a>
     <a routerLink="/retire">Retire</a>
   </nav>
+  <button class="theme-toggle" (click)="theme.toggle()" [attr.aria-label]="theme.isDark() ? 'Switch to light mode' : 'Switch to dark mode'">
+    {{ theme.icon() }}
+  </button>
   <app-connect-wallet />
 </header>
 
