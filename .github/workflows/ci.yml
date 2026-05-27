@@ -45,6 +45,14 @@ jobs:
       - name: Run Tests
         run: cd api && npm run test
 
+  docker:
+    name: Docker Build (API)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker image
+        run: docker build -t carbonchain-api ./api
+
   security:
     name: Dependency Vulnerability Scan
     runs-on: ubuntu-latest
