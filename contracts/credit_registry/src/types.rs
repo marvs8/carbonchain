@@ -36,6 +36,13 @@ pub struct CreditMetadata {
     pub issued_at: u64,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+#[contracttype]
+pub struct VerifierReputation {
+    pub approval_count: u64,
+    pub dispute_count: u64,
+}
+
 #[derive(Clone)]
 #[contracttype]
 pub enum DataKey {
@@ -46,7 +53,7 @@ pub enum DataKey {
     RetirementContract,
     CreditNonce,
     Paused,
-    VerifierServices(Address),
-    PendingAdmin,
     Nonce(Address),
+    PendingAdmin,
+    VerifierReputation(Address),
 }

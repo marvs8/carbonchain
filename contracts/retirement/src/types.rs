@@ -23,4 +23,6 @@ pub enum DataKey {
     AccountRetirements(Address),
     Admin,
     Paused,
+    Nonce(Address),
+    PendingAdmin,
 }

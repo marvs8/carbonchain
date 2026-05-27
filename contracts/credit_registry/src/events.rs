@@ -32,3 +32,18 @@ pub fn contract_paused(env: &Env, admin: Address) {
 pub fn contract_unpaused(env: &Env, admin: Address) {
     env.events().publish((symbol_short!("unpaused"),), admin);
 }
+
+pub fn credit_transferred(env: &Env, from: Address, to: Address, credit_id: BytesN<32>) {
+    let topics = (symbol_short!("xfer"),);
+    env.events().publish(topics, (from, to, credit_id));
+}
+
+pub fn credit_split(env: &Env, original_id: BytesN<32>, child1_id: BytesN<32>, child2_id: BytesN<32>) {
+    let topics = (symbol_short!("split"),);
+    env.events().publish(topics, (original_id, child1_id, child2_id));
+}
+
+pub fn batch_retired(env: &Env, buyer: Address, count: u32) {
+    let topics = (symbol_short!("batch_ret"), buyer);
+    env.events().publish(topics, count);
+}
