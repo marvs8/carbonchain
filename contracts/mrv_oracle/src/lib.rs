@@ -201,6 +201,33 @@ impl MrvOracle {
             .unwrap_or_else(|| Vec::new(&env))
     }
 
+    /// Aggregate MRV readings over a time range.
+    /// Returns (sum_tonnes, average_tonnes) for readings where from_ts <= recorded_at <= to_ts.
+    pub fn get_mrv_aggregate(
+        env: Env,
+        project_id: String,
+        from_ts: u64,
+        to_ts: u64,
+    ) -> (i128, i128) {
+        let history = env.storage()
+            .persistent()
+            .get::<_, Vec<MrvDataPoint>>(&DataKey::History(project_id))
+            .unwrap_or_else(|| Vec::new(&env));
+
+        let mut sum: i128 = 0;
+        let mut count: i128 = 0;
+
+        for point in history.iter() {
+            if point.recorded_at >= from_ts && point.recorded_at <= to_ts {
+                sum += point.tonnes;
+                count += 1;
+            }
+        }
+
+        let avg = if count > 0 { sum / count } else { 0 };
+        (sum, avg)
+    }
+
     // ── Internal ─────────────────────────────────────────────────────────────
 
     fn require_admin(env: &Env, caller: &Address) -> Result<(), OracleError> {
@@ -437,5 +464,40 @@ mod tests {
         let (env, client, _, _) = setup();
         let rando = Address::generate(&env);
         assert!(client.try_pause(&rando).is_err());
+    }
+
+    #[test]
+    fn test_get_mrv_aggregate_sum_and_average() {
+        let (env, client, _admin, oracle) = setup();
+        let proj = String::from_str(&env, "PROJ-AGG");
+        
+        // Record three data points
+        let nonce1 = client.get_nonce(&oracle);
+        client.update_mrv_data(&oracle, &proj, &1_000_000, &nonce1);
+        
+        let nonce2 = client.get_nonce(&oracle);
+        client.update_mrv_data(&oracle, &proj, &2_000_000, &nonce2);
+        
+        let nonce3 = client.get_nonce(&oracle);
+        client.update_mrv_data(&oracle, &proj, &3_000_000, &nonce3);
+
+        // Get aggregate over full range
+        let (sum, avg) = client.get_mrv_aggregate(&proj, &0, &u64::MAX);
+        assert_eq!(sum, 6_000_000);
+        assert_eq!(avg, 2_000_000);
+    }
+
+    #[test]
+    fn test_get_mrv_aggregate_empty_range() {
+        let (env, client, _admin, oracle) = setup();
+        let proj = String::from_str(&env, "PROJ-EMPTY");
+        
+        let nonce = client.get_nonce(&oracle);
+        client.update_mrv_data(&oracle, &proj, &1_000_000, &nonce);
+
+        // Query outside the recorded time range
+        let (sum, avg) = client.get_mrv_aggregate(&proj, &0, &1);
+        assert_eq!(sum, 0);
+        assert_eq!(avg, 0);
     }
 }
