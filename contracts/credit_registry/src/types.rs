@@ -33,4 +33,7 @@ pub enum DataKey {
     RetirementContract,
     CreditNonce,
     Paused,
+    PendingAdmin,
+    Nonce(Address),
+    AllCredits,
 }

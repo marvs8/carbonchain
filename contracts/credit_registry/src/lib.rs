@@ -195,6 +195,14 @@ impl CreditRegistry {
 
         set_credit(&env, &id, &metadata);
         add_credit_to_project(&env, &project_id, &id);
+        
+        // Add to global credits list for status filtering
+        let mut all_credits: Vec<BytesN<32>> = env.storage().instance()
+            .get(&DataKey::AllCredits)
+            .unwrap_or_else(|| Vec::new(&env));
+        all_credits.push_back(id.clone());
+        env.storage().instance().set(&DataKey::AllCredits, &all_credits);
+        
         credit_submitted(&env, issuer, project_id, tonnes);
 
         Ok(id)
@@ -267,6 +275,21 @@ impl CreditRegistry {
 
     pub fn list_credits_by_project(env: Env, project_id: String) -> Vec<BytesN<32>> {
         get_credits_by_project(&env, &project_id)
+    }
+
+    pub fn list_credits_by_status(env: Env, status: CreditStatus) -> Vec<BytesN<32>> {
+        let all_credits: Vec<BytesN<32>> = env.storage().instance()
+            .get(&DataKey::AllCredits)
+            .unwrap_or_else(|| Vec::new(&env));
+        let mut result: Vec<BytesN<32>> = Vec::new(&env);
+        for credit_id in all_credits.iter() {
+            if let Some(credit) = get_credit(&env, &credit_id) {
+                if credit.status == status {
+                    result.push_back(credit_id);
+                }
+            }
+        }
+        result
     }
 
     pub fn get_nonce(env: Env, address: Address) -> u64 {
@@ -580,6 +603,35 @@ mod tests {
         submit_test_credit(&env, &client, &issuer);
         let ids = client.list_credits_by_project(&String::from_str(&env, "PROJ-001"));
         assert_eq!(ids.len(), 1);
+    }
+
+    #[test]
+    fn test_list_credits_by_status() {
+        let (env, client, admin, verifier) = setup();
+        let nonce = client.get_nonce(&admin);
+        client.register_verifier(&admin, &verifier, &nonce);
+        
+        // Submit two credits
+        let issuer = Address::generate(&env);
+        let id1 = submit_test_credit(&env, &client, &issuer);
+        let id2 = submit_test_credit(&env, &client, &issuer);
+        
+        // Both should be Pending
+        let pending = client.list_credits_by_status(&CreditStatus::Pending);
+        assert_eq!(pending.len(), 2);
+        
+        // Approve one
+        let vnonce = client.get_nonce(&verifier);
+        client.approve_and_mint(&verifier, &id1, &vnonce);
+        
+        // Now one should be Active, one Pending
+        let active = client.list_credits_by_status(&CreditStatus::Active);
+        assert_eq!(active.len(), 1);
+        assert_eq!(active.get(0).unwrap(), id1);
+        
+        let pending = client.list_credits_by_status(&CreditStatus::Pending);
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending.get(0).unwrap(), id2);
     }
 
     #[test]
