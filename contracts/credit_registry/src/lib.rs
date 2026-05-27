@@ -311,8 +311,13 @@ impl CreditRegistry {
         get_credit(&env, &credit_id).ok_or(CarbonChainError::CreditNotFound)
     }
 
-    /// Lightweight view that returns only the status of a credit without
-    /// deserialising the full `CreditMetadata` struct.
+    /// Lightweight view that returns only the [`CreditStatus`] for a given
+    /// `credit_id` without deserialising the full [`CreditMetadata`] struct.
+    /// Callers that only need to check status should prefer this over
+    /// [`Self::get_credit`] to reduce compute cost.
+    ///
+    /// Returns [`CarbonChainError::CreditNotFound`] if no credit exists for
+    /// the given ID.
     pub fn get_credit_status(env: Env, credit_id: BytesN<32>) -> Result<CreditStatus, CarbonChainError> {
         let credit = get_credit(&env, &credit_id).ok_or(CarbonChainError::CreditNotFound)?;
         Ok(credit.status)
