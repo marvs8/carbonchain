@@ -168,6 +168,10 @@ impl CreditRegistry {
         if !consume_nonce(&env, &issuer, nonce) {
             return Err(CarbonChainError::InvalidNonce);
         }
+        // Validate project exists
+        if get_project(&env, &project_id).is_none() {
+            return Err(CarbonChainError::ProjectNotFound);
+        }
         if tonnes <= 0 {
             return Err(CarbonChainError::InvalidTonnes);
         }
@@ -553,6 +557,17 @@ mod tests {
         let verifier = Address::generate(&env);
         let retirement = Address::generate(&env);
         client.initialize(&admin, &retirement);
+        
+        // Register default project for tests
+        let owner = Address::generate(&env);
+        client.register_project(
+            &owner,
+            &String::from_str(&env, "PROJ-001"),
+            &String::from_str(&env, "Test Project"),
+            &String::from_str(&env, "A test project"),
+            &String::from_str(&env, "Nigeria"),
+        );
+        
         (env, client, admin, verifier)
     }
 
@@ -837,6 +852,7 @@ mod tests {
         client.pause(&admin);
         assert!(client.paused());
         let issuer = Address::generate(&env);
+        let nonce = client.get_nonce(&issuer);
         let result = client.try_submit_credit(
             &issuer,
             &String::from_str(&env, "PROJ-001"),
@@ -845,6 +861,7 @@ mod tests {
             &String::from_str(&env, "NG"),
             &1_000_000,
             &String::from_str(&env, "bafybei123"),
+            &nonce,
         );
         assert!(result.is_err());
     }
@@ -856,6 +873,7 @@ mod tests {
         client.unpause(&admin);
         assert!(!client.paused());
         let issuer = Address::generate(&env);
+        let nonce = client.get_nonce(&issuer);
         let result = client.try_submit_credit(
             &issuer,
             &String::from_str(&env, "PROJ-001"),
@@ -864,6 +882,7 @@ mod tests {
             &String::from_str(&env, "NG"),
             &1_000_000,
             &String::from_str(&env, "bafybei123"),
+            &nonce,
         );
         assert!(result.is_ok());
     }
