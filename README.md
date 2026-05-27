@@ -59,7 +59,7 @@ let credit_id = contract.submit_credit(
         vintage_year: 2024,
         methodology: String::from_str(&env, "VCS"),
         geography: String::from_str(&env, "NG"),
-        tonnes: 1_000_000,   // 1 tonne in kg units
+        tonnes: 1_000_000,   // 1 tonne (1 tonne = 1_000_000 units, i.e. TONNES_SCALE)
         ipfs_hash: String::from_str(&env, "bafybei..."),
     },
 );
@@ -503,12 +503,15 @@ CarbonChain is designed to work seamlessly across all major platforms:
 
 ## Security
 
+See [SECURITY.md](SECURITY.md) for the vulnerability reporting and responsible disclosure process.
+
 - No private keys in the API — all user-facing transactions signed client-side via Freighter
 - Stable error codes (100–120) for API compatibility across contract upgrades
 - Replay protection at multiple contract levels with nonce-based verification
 - Immutable audit logs — no delete functions on retirement or session records
 - Authorization checks on all state-mutating operations
 - `.claudeignore` excludes `ADMIN_SECRET_KEY` and all secrets from Claude Code context
+- `cargo audit` runs in CI on every push/PR — high-severity CVEs in Rust dependencies fail the build
 
 ---
 

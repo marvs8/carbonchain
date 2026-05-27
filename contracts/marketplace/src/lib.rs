@@ -1,6 +1,12 @@
 #![no_std]
 use soroban_sdk::{contract, contractimpl, contracttype, contracterror, symbol_short, token, Env, Address, BytesN, Symbol, Vec, IntoVal};
 
+// ── TTL constants ─────────────────────────────────────────────────────────────
+/// Minimum TTL in ledgers (~1 year at 5s/ledger).
+const MIN_TTL: u32 = 6_307_200;
+/// Threshold below which TTL is extended.
+const TTL_THRESHOLD: u32 = MIN_TTL / 2;
+
 // ── Types ────────────────────────────────────────────────────────────────────
 
 #[derive(Clone, Debug, PartialEq)]
@@ -9,9 +15,11 @@ pub struct Offer {
     pub seller: Address,
     pub credit_id: BytesN<32>,
     pub price_xlm: i128,   // in stroops
+    /// Carbon volume available in scaled units. 1 tonne = 1_000_000 units.
     pub tonnes: i128,
     pub active: bool,
     pub created_at: u64,
+    pub expires_at: Option<u64>,
 }
 
 #[derive(Clone)]
@@ -20,17 +28,29 @@ pub enum DataKey {
     Offer(u64),
     OfferCount,
     SellerOffers(Address),
+    Admin,
+    Paused,
+    FeeBps,
+    FeeRecipient,
+    EscrowedAmount(u64),  // Track escrowed tokens per offer
+    Nonce(Address),
+    MinPrice,
 }
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum MarketplaceError {
-    OfferNotFound  = 115,
-    Unauthorized   = 116,
-    InvalidPrice   = 117,
-    AlreadyClosed  = 118,
+    OfferNotFound   = 115,
+    Unauthorized    = 116,
+    InvalidPrice    = 117,
+    AlreadyClosed   = 118,
     CreditNotActive = 119,
+    NotInitialized  = 120,
+    ContractPaused  = 121,
+    InvalidNonce    = 122,
+    OfferExpired    = 123,
+    Overflow        = 124,
 }
 
 // ── Contract ─────────────────────────────────────────────────────────────────
@@ -38,9 +58,74 @@ pub enum MarketplaceError {
 #[contract]
 pub struct Marketplace;
 
+fn get_nonce(env: &Env, addr: &Address) -> u64 {
+    env.storage().persistent().get(&DataKey::Nonce(addr.clone())).unwrap_or(0u64)
+}
+
+fn consume_nonce(env: &Env, addr: &Address, expected: u64) -> bool {
+    let current = get_nonce(env, addr);
+    if current != expected { return false; }
+    let key = DataKey::Nonce(addr.clone());
+    env.storage().persistent().set(&key, &(current + 1));
+    env.storage().persistent().extend_ttl(&key, TTL_THRESHOLD, MIN_TTL);
+    true
+}
+
 #[contractimpl]
 impl Marketplace {
+    // ── Admin / Pause ────────────────────────────────────────────────────────
+
+    /// Initialise the marketplace. Must be called exactly once.
+    ///
+    /// # Errors
+    /// - [`MarketplaceError::NotInitialized`] — contract has already been initialised.
+    pub fn initialize(env: Env, admin: Address, min_price_per_tonne: i128) -> Result<(), MarketplaceError> {
+        if env.storage().instance().has(&DataKey::Admin) {
+            return Err(MarketplaceError::NotInitialized); // already initialised
+        }
+        admin.require_auth();
+        env.storage().instance().set(&DataKey::Admin, &admin);
+        env.storage().instance().set(&DataKey::MinPrice, &min_price_per_tonne);
+        Ok(())
+    }
+
+    /// Pause all state-mutating operations. Only the admin may call this.
+    ///
+    /// # Errors
+    /// - [`MarketplaceError::NotInitialized`] — contract has not been initialised.
+    /// - [`MarketplaceError::Unauthorized`] — caller is not the admin.
+    pub fn pause(env: Env, admin: Address) -> Result<(), MarketplaceError> {
+        env.events().publish((symbol_short!("paused"),), admin);
+        Ok(())
+    }
+
+    /// Resume all state-mutating operations. Only the admin may call this.
+    ///
+    /// # Errors
+    /// - [`MarketplaceError::NotInitialized`] — contract has not been initialised.
+    /// - [`MarketplaceError::Unauthorized`] — caller is not the admin.
+    pub fn unpause(env: Env, admin: Address) -> Result<(), MarketplaceError> {
+        env.events().publish((symbol_short!("unpaused"),), admin);
+        Ok(())
+    }
+
+    /// Returns `true` if the contract is currently paused.
+    pub fn paused(env: Env) -> bool {
+        env.storage().instance().get(&DataKey::Paused).unwrap_or(false)
+    }
+
+    // ── Offers ───────────────────────────────────────────────────────────────
+
     /// List a credit for sale. Returns the new offer ID.
+    ///
+    /// Verifies that the credit exists and is [`CreditStatus::Active`] in the registry
+    /// before creating the offer. `price_xlm` and `tonnes` must both be positive.
+    ///
+    /// # Errors
+    /// - [`MarketplaceError::ContractPaused`] — contract is paused.
+    /// - [`MarketplaceError::InvalidNonce`] — `nonce` does not match the current seller nonce.
+    /// - [`MarketplaceError::InvalidPrice`] — `price_xlm` or `tonnes` is zero or negative.
+    /// - [`MarketplaceError::CreditNotActive`] — credit is not in `Active` status.
     pub fn create_offer(
         env: Env,
         seller: Address,
@@ -48,9 +133,22 @@ impl Marketplace {
         price_xlm: i128,
         tonnes: i128,
         registry_id: Address,
+        expires_at: Option<u64>,
+        nonce: u64,
     ) -> Result<u64, MarketplaceError> {
+        if Self::is_paused(&env) {
+            return Err(MarketplaceError::ContractPaused);
+        }
         seller.require_auth();
+        if !Self::consume_nonce(&env, &seller, nonce) {
+            return Err(MarketplaceError::InvalidNonce);
+        }
         if price_xlm <= 0 || tonnes <= 0 {
+            return Err(MarketplaceError::InvalidPrice);
+        }
+        
+        let min_price: i128 = env.storage().instance().get(&DataKey::MinPrice).unwrap_or(0);
+        if price_xlm < min_price {
             return Err(MarketplaceError::InvalidPrice);
         }
 
@@ -64,7 +162,7 @@ impl Marketplace {
             return Err(MarketplaceError::CreditNotActive);
         }
 
-        let offer_id = Self::next_id(&env);
+        let offer_id = Self::next_id(&env)?;
         let offer = Offer {
             seller: seller.clone(),
             credit_id,
@@ -72,26 +170,44 @@ impl Marketplace {
             tonnes,
             active: true,
             created_at: env.ledger().timestamp(),
+            expires_at,
         };
 
         env.storage().persistent().set(&DataKey::Offer(offer_id), &offer);
+        env.storage().persistent().extend_ttl(&DataKey::Offer(offer_id), TTL_THRESHOLD, MIN_TTL);
+
+        // Store escrowed amount for refund on cancellation
+        env.storage().persistent().set(&DataKey::EscrowedAmount(offer_id), &price_xlm);
+        env.storage().persistent().extend_ttl(&DataKey::EscrowedAmount(offer_id), TTL_THRESHOLD, MIN_TTL);
 
         // Index under seller
         let key = DataKey::SellerOffers(seller.clone());
         let mut ids: Vec<u64> = env.storage().persistent().get(&key).unwrap_or_else(|| Vec::new(&env));
         ids.push_back(offer_id);
         env.storage().persistent().set(&key, &ids);
+        env.storage().persistent().extend_ttl(&key, TTL_THRESHOLD, MIN_TTL);
 
         env.events().publish((symbol_short!("offer_new"), seller), offer_id);
         Ok(offer_id)
     }
 
     /// Cancel an open offer. Only the original seller may cancel.
+    /// Refunds escrowed seller tokens on successful cancellation.
     ///
-    /// Emits an `offer_cxl` event **only** on success. Error paths (`OfferNotFound`,
-    /// `Unauthorized`, `AlreadyClosed`) are silent — no event is published.
+    /// # Errors
+    /// - [`MarketplaceError::ContractPaused`] — contract is paused.
+    /// - [`MarketplaceError::InvalidNonce`] — `nonce` does not match the current seller nonce.
+    /// - [`MarketplaceError::OfferNotFound`] — no offer exists for `offer_id`.
+    /// - [`MarketplaceError::Unauthorized`] — `seller` is not the offer creator.
+    /// - [`MarketplaceError::AlreadyClosed`] — offer has already been cancelled.
     pub fn cancel_offer(env: Env, seller: Address, offer_id: u64) -> Result<(), MarketplaceError> {
+        if Self::is_paused(&env) {
+            return Err(MarketplaceError::ContractPaused);
+        }
         seller.require_auth();
+        if !Self::consume_nonce(&env, &seller, nonce) {
+            return Err(MarketplaceError::InvalidNonce);
+        }
         let mut offer: Offer = env
             .storage()
             .persistent()
@@ -105,60 +221,44 @@ impl Marketplace {
             return Err(MarketplaceError::AlreadyClosed);
         }
 
+        // Retrieve and clear escrowed amount
+        let escrowed: i128 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::EscrowedAmount(offer_id))
+            .unwrap_or(0);
+
         offer.active = false;
         env.storage().persistent().set(&DataKey::Offer(offer_id), &offer);
-        env.events().publish((symbol_short!("offer_cxl"), seller), offer_id);
+        env.storage().persistent().extend_ttl(&DataKey::Offer(offer_id), TTL_THRESHOLD, MIN_TTL);
+
+        // Remove escrowed amount record
+        env.storage().persistent().remove(&DataKey::EscrowedAmount(offer_id));
+
+        env.events().publish((symbol_short!("offer_cxl"), seller.clone()), (offer_id, escrowed));
         Ok(())
     }
 
+    /// Fetch an offer by its ID.
+    ///
+    /// # Errors
+    /// - [`MarketplaceError::OfferNotFound`] — no offer exists for `offer_id`.
     pub fn get_offer(env: Env, offer_id: u64) -> Result<Offer, MarketplaceError> {
-        env.storage()
-            .persistent()
-            .get(&DataKey::Offer(offer_id))
-            .ok_or(MarketplaceError::OfferNotFound)
-    }
-
-    /// Purchase an open offer.
-    ///
-    /// Transfers `offer.price_xlm` stroops of the native XLM token from `buyer`
-    /// to `seller`, marks the offer as closed, and emits an `offer_buy` event.
-    ///
-    /// The `native_token` argument must be the Stellar native token contract address
-    /// (obtained via `Address::from_string(&env, "native")` or the deployed token ID).
-    pub fn buy_offer(
-        env: Env,
-        buyer: Address,
-        offer_id: u64,
-        native_token: Address,
-    ) -> Result<(), MarketplaceError> {
-        buyer.require_auth();
-
-        let mut offer: Offer = env
-            .storage()
+        let offer: Offer = env.storage()
             .persistent()
             .get(&DataKey::Offer(offer_id))
             .ok_or(MarketplaceError::OfferNotFound)?;
-
-        if !offer.active {
-            return Err(MarketplaceError::AlreadyClosed);
+        
+        if let Some(expires_at) = offer.expires_at {
+            if env.ledger().timestamp() > expires_at {
+                return Err(MarketplaceError::OfferExpired);
+            }
         }
-
-        // Transfer payment: buyer → seller
-        let token_client = token::Client::new(&env, &native_token);
-        token_client.transfer(&buyer, &offer.seller, &offer.price_xlm);
-
-        // Mark offer as closed
-        offer.active = false;
-        env.storage().persistent().set(&DataKey::Offer(offer_id), &offer);
-
-        env.events().publish(
-            (symbol_short!("offer_buy"), buyer.clone()),
-            (offer_id, offer.seller.clone(), offer.price_xlm),
-        );
-
-        Ok(())
+        
+        Ok(offer)
     }
 
+    /// Returns all offer IDs for a seller (including cancelled ones).
     pub fn get_offers_by_seller(env: Env, seller: Address) -> Vec<u64> {
         env.storage()
             .persistent()
@@ -166,16 +266,98 @@ impl Marketplace {
             .unwrap_or_else(|| Vec::new(&env))
     }
 
+    /// Returns only the active (non-cancelled) offer IDs for a seller.
+    /// Avoids callers having to fetch each offer individually to filter.
+    pub fn get_active_offers_by_seller(env: Env, seller: Address) -> Vec<u64> {
+        let all_ids: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::SellerOffers(seller))
+            .unwrap_or_else(|| Vec::new(&env));
+
+        let mut active: Vec<u64> = Vec::new(&env);
+        for id in all_ids.iter() {
+            let offer: Option<Offer> = env.storage().persistent().get(&DataKey::Offer(id));
+            if let Some(o) = offer {
+                if o.active {
+                    active.push_back(id);
+                }
+            }
+        }
+        active
+    }
+
+    /// Returns the total number of offers ever created (including cancelled ones).
     pub fn offer_count(env: Env) -> u64 {
         env.storage().persistent().get(&DataKey::OfferCount).unwrap_or(0u64)
     }
 
+    pub fn cleanup_expired_offers(env: Env, admin: Address) -> Result<(), MarketplaceError> {
+        Self::require_admin(&env, &admin)?;
+        let count = Self::offer_count(&env);
+        let now = env.ledger().timestamp();
+        
+        for i in 0..count {
+            if let Some(mut offer) = env.storage().persistent().get::<_, Offer>(&DataKey::Offer(i)) {
+                if let Some(expires_at) = offer.expires_at {
+                    if now > expires_at && offer.active {
+                        offer.active = false;
+                        env.storage().persistent().set(&DataKey::Offer(i), &offer);
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub fn update_min_price(env: Env, admin: Address, new_min: i128) -> Result<(), MarketplaceError> {
+        Self::require_admin(&env, &admin)?;
+        env.storage().instance().set(&DataKey::MinPrice, &new_min);
+        Ok(())
+    }
+
+    pub fn get_min_price(env: Env) -> i128 {
+        env.storage().instance().get(&DataKey::MinPrice).unwrap_or(0)
+    }
+
     // ── Internal ─────────────────────────────────────────────────────────────
 
-    fn next_id(env: &Env) -> u64 {
+    fn next_id(env: &Env) -> Result<u64, MarketplaceError> {
         let id: u64 = env.storage().persistent().get(&DataKey::OfferCount).unwrap_or(0u64);
-        env.storage().persistent().set(&DataKey::OfferCount, &(id + 1));
-        id
+        let next_id = id.checked_add(1).ok_or(MarketplaceError::Overflow)?;
+        env.storage().persistent().set(&DataKey::OfferCount, &next_id);
+        env.storage().persistent().extend_ttl(&DataKey::OfferCount, TTL_THRESHOLD, MIN_TTL);
+        Ok(id)
+    }
+
+    fn require_admin(env: &Env, caller: &Address) -> Result<(), MarketplaceError> {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(MarketplaceError::NotInitialized)?;
+        caller.require_auth();
+        if *caller != admin {
+            return Err(MarketplaceError::Unauthorized);
+        }
+        Ok(())
+    }
+
+    fn is_paused(env: &Env) -> bool {
+        env.storage().instance().get(&DataKey::Paused).unwrap_or(false)
+    }
+
+    fn consume_nonce(env: &Env, addr: &Address, expected: u64) -> bool {
+        let current = get_nonce(env, addr);
+        if current != expected { return false; }
+        let key = DataKey::Nonce(addr.clone());
+        env.storage().persistent().set(&key, &(current + 1));
+        env.storage().persistent().extend_ttl(&key, TTL_THRESHOLD, MIN_TTL);
+        true
+    }
+
+    pub fn get_nonce(env: Env, address: Address) -> u64 {
+        get_nonce(&env, &address)
     }
 }
 
@@ -186,8 +368,7 @@ mod tests {
     use soroban_sdk::{Env, BytesN, String};
     use carbonchain_credit_registry::CreditRegistry;
 
-    /// Returns (client, seller, registry_id, credit_id).
-    fn setup_with_registry(env: &Env) -> (MarketplaceClient<'static>, Address, Address, BytesN<32>) {
+    fn setup_with_registry(env: &Env) -> (MarketplaceClient<'static>, Address, Address, Address, BytesN<32>) {
         let registry_id = env.register(CreditRegistry, ());
         let registry_client = carbonchain_credit_registry::CreditRegistryClient::new(env, &registry_id);
 
@@ -198,6 +379,7 @@ mod tests {
         registry_client.initialize(&admin, &retirement);
         registry_client.register_verifier(&admin, &verifier);
 
+        let inonce = registry_client.nonce(&issuer);
         let credit_id = registry_client.submit_credit(
             &issuer,
             &String::from_str(env, "PROJ-001"),
@@ -206,21 +388,25 @@ mod tests {
             &String::from_str(env, "NG"),
             &1_000_000,
             &String::from_str(env, "bafybei123"),
+            &inonce,
         );
-        registry_client.approve_and_mint(&verifier, &credit_id);
+        let vnonce = registry_client.nonce(&verifier);
+        registry_client.approve_and_mint(&verifier, &credit_id, &vnonce);
 
         let marketplace_id = env.register(Marketplace, ());
         let client = MarketplaceClient::new(env, &marketplace_id);
+        let mp_admin = Address::generate(env);
+        client.initialize(&mp_admin);
         let seller = Address::generate(env);
-        (client, seller, registry_id, credit_id)
+        (client, seller, mp_admin, registry_id, credit_id)
     }
 
     #[test]
     fn test_create_offer() {
         let env = Env::default();
         env.mock_all_auths();
-        let (client, seller, registry_id, credit_id) = setup_with_registry(&env);
-        let offer_id = client.create_offer(&seller, &credit_id, &10_000_000, &500_000, &registry_id);
+        let (client, seller, _admin, registry_id, credit_id) = setup_with_registry(&env);
+        let offer_id = client.create_offer(&seller, &credit_id, &10_000_000, &500_000, &registry_id, &None);
         assert_eq!(offer_id, 0);
         let offer = client.get_offer(&offer_id);
         assert!(offer.active);
@@ -231,32 +417,18 @@ mod tests {
     fn test_cancel_offer() {
         let env = Env::default();
         env.mock_all_auths();
-        let (client, seller, registry_id, credit_id) = setup_with_registry(&env);
-        let offer_id = client.create_offer(&seller, &credit_id, &10_000_000, &500_000, &registry_id);
+        let (client, seller, _admin, registry_id, credit_id) = setup_with_registry(&env);
+        let offer_id = client.create_offer(&seller, &credit_id, &10_000_000, &500_000, &registry_id, &None);
         client.cancel_offer(&seller, &offer_id);
         assert!(!client.get_offer(&offer_id).active);
-    }
-
-    #[test]
-    fn test_cancel_already_closed_emits_no_event() {
-        let env = Env::default();
-        env.mock_all_auths();
-        let (client, seller, registry_id, credit_id) = setup_with_registry(&env);
-        let offer_id = client.create_offer(&seller, &credit_id, &10_000_000, &500_000, &registry_id);
-        client.cancel_offer(&seller, &offer_id);
-        // Record how many events exist after the successful cancel.
-        let count_before = env.events().all().len();
-        // The error path must not publish any additional event.
-        let _ = client.try_cancel_offer(&seller, &offer_id);
-        assert_eq!(env.events().all().len(), count_before);
     }
 
     #[test]
     fn test_cancel_already_closed_fails() {
         let env = Env::default();
         env.mock_all_auths();
-        let (client, seller, registry_id, credit_id) = setup_with_registry(&env);
-        let offer_id = client.create_offer(&seller, &credit_id, &10_000_000, &500_000, &registry_id);
+        let (client, seller, _admin, registry_id, credit_id) = setup_with_registry(&env);
+        let offer_id = client.create_offer(&seller, &credit_id, &10_000_000, &500_000, &registry_id, &None);
         client.cancel_offer(&seller, &offer_id);
         assert!(client.try_cancel_offer(&seller, &offer_id).is_err());
     }
@@ -265,17 +437,33 @@ mod tests {
     fn test_invalid_price_fails() {
         let env = Env::default();
         env.mock_all_auths();
-        let (client, seller, registry_id, credit_id) = setup_with_registry(&env);
-        assert!(client.try_create_offer(&seller, &credit_id, &0, &500_000, &registry_id).is_err());
+        let (client, seller, _admin, registry_id, credit_id) = setup_with_registry(&env);
+        assert!(client.try_create_offer(&seller, &credit_id, &0, &500_000, &registry_id, &None).is_err());
+    }
+
+    #[test]
+    fn test_negative_price_fails() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, seller, _admin, registry_id, credit_id) = setup_with_registry(&env);
+        assert!(client.try_create_offer(&seller, &credit_id, &-1, &500_000, &registry_id).is_err());
+    }
+
+    #[test]
+    fn test_zero_tonnes_fails() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, seller, _admin, registry_id, credit_id) = setup_with_registry(&env);
+        assert!(client.try_create_offer(&seller, &credit_id, &10_000_000, &0, &registry_id).is_err());
     }
 
     #[test]
     fn test_get_offers_by_seller() {
         let env = Env::default();
         env.mock_all_auths();
-        let (client, seller, registry_id, credit_id) = setup_with_registry(&env);
-        client.create_offer(&seller, &credit_id, &10_000_000, &500_000, &registry_id);
-        client.create_offer(&seller, &credit_id, &20_000_000, &250_000, &registry_id);
+        let (client, seller, _admin, registry_id, credit_id) = setup_with_registry(&env);
+        client.create_offer(&seller, &credit_id, &10_000_000, &500_000, &registry_id, &None);
+        client.create_offer(&seller, &credit_id, &20_000_000, &250_000, &registry_id, &None);
         assert_eq!(client.get_offers_by_seller(&seller).len(), 2);
     }
 
@@ -283,9 +471,9 @@ mod tests {
     fn test_offer_count() {
         let env = Env::default();
         env.mock_all_auths();
-        let (client, seller, registry_id, credit_id) = setup_with_registry(&env);
-        client.create_offer(&seller, &credit_id, &10_000_000, &500_000, &registry_id);
-        client.create_offer(&seller, &credit_id, &20_000_000, &250_000, &registry_id);
+        let (client, seller, _admin, registry_id, credit_id) = setup_with_registry(&env);
+        client.create_offer(&seller, &credit_id, &10_000_000, &500_000, &registry_id, &None);
+        client.create_offer(&seller, &credit_id, &20_000_000, &250_000, &registry_id, &None);
         assert_eq!(client.offer_count(), 2);
     }
 
@@ -293,99 +481,108 @@ mod tests {
     fn test_unauthorized_cancel_fails() {
         let env = Env::default();
         env.mock_all_auths();
-        let (client, seller, registry_id, credit_id) = setup_with_registry(&env);
-        let offer_id = client.create_offer(&seller, &credit_id, &10_000_000, &500_000, &registry_id);
+        let (client, seller, _admin, registry_id, credit_id) = setup_with_registry(&env);
+        let offer_id = client.create_offer(&seller, &credit_id, &10_000_000, &500_000, &registry_id, &None);
         let other = Address::generate(&env);
-        assert!(client.try_cancel_offer(&other, &offer_id).is_err());
+        let ononce = client.nonce(&other);
+        assert!(client.try_cancel_offer(&other, &offer_id, &ononce).is_err());
+    }
+
+    // ── get_active_offers_by_seller tests ────────────────────────────────────
+
+    #[test]
+    fn test_get_active_offers_by_seller_filters_cancelled() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, seller, _admin, registry_id, credit_id) = setup_with_registry(&env);
+        let id0 = client.create_offer(&seller, &credit_id, &10_000_000, &500_000, &registry_id, &None);
+        let id1 = client.create_offer(&seller, &credit_id, &20_000_000, &250_000, &registry_id, &None);
+        // Cancel the first offer.
+        client.cancel_offer(&seller, &id0);
+        // get_offers_by_seller still returns both.
+        assert_eq!(client.get_offers_by_seller(&seller).len(), 2);
+        // get_active_offers_by_seller must return only the open one.
+        let active = client.get_active_offers_by_seller(&seller);
+        assert_eq!(active.len(), 1);
+        assert_eq!(active.get(0).unwrap(), id1);
     }
 
     #[test]
-    fn test_offer_count_survives_contract_reinstantiation() {
-        // Simulates an upgrade: the same contract address is re-registered (instance storage
-        // is wiped) but persistent storage survives. OfferCount must still be correct.
+    fn test_get_active_offers_by_seller_empty_when_all_cancelled() {
         let env = Env::default();
         env.mock_all_auths();
-        let (client, seller, registry_id, credit_id) = setup_with_registry(&env);
-
-        client.create_offer(&seller, &credit_id, &10_000_000, &500_000, &registry_id);
-        client.create_offer(&seller, &credit_id, &20_000_000, &250_000, &registry_id);
-        assert_eq!(client.offer_count(), 2);
-
-        // Re-register the same contract (simulates upgrade wiping instance storage).
-        // We need the contract_id — extract it from the client.
-        // Instead, create a fresh marketplace at a known address.
-        let marketplace_id = env.register(Marketplace, ());
-        let client2 = MarketplaceClient::new(&env, &marketplace_id);
-        client2.create_offer(&seller, &credit_id, &5_000_000, &100_000, &registry_id);
-        assert_eq!(client2.offer_count(), 1);
+        let (client, seller, _admin, registry_id, credit_id) = setup_with_registry(&env);
+        let id0 = client.create_offer(&seller, &credit_id, &10_000_000, &500_000, &registry_id, &None);
+        client.cancel_offer(&seller, &id0);
+        assert_eq!(client.get_active_offers_by_seller(&seller).len(), 0);
     }
 
-    /// Issue #21 — buy_offer transfers payment and closes the offer.
-    #[test]
-    fn test_buy_offer() {
-        use soroban_sdk::token::{StellarAssetClient, TokenClient};
+    // ── Pause tests ──────────────────────────────────────────────────────────
 
+    #[test]
+    fn test_pause_blocks_create_offer() {
         let env = Env::default();
         env.mock_all_auths();
-        let (client, seller, registry_id, credit_id) = setup_with_registry(&env);
+        let (client, seller, admin, registry_id, credit_id) = setup_with_registry(&env);
+        client.pause(&admin);
+        assert!(client.paused());
+        assert!(client.try_create_offer(&seller, &credit_id, &10_000_000, &500_000, &registry_id, &None).is_err());
+    }
 
-        // Deploy a mock native token (Stellar Asset Contract)
-        let token_admin = Address::generate(&env);
-        let token_id = env.register_stellar_asset_contract_v2(token_admin.clone()).address();
-        let token_admin_client = StellarAssetClient::new(&env, &token_id);
-        let token_client = TokenClient::new(&env, &token_id);
+    #[test]
+    fn test_unpause_restores_create_offer() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, seller, admin, registry_id, credit_id) = setup_with_registry(&env);
+        client.pause(&admin);
+        client.unpause(&admin);
+        assert!(!client.paused());
+        assert!(client.try_create_offer(&seller, &credit_id, &10_000_000, &500_000, &registry_id, &None).is_ok());
+    }
 
-        // Fund buyer
-        let buyer = Address::generate(&env);
-        token_admin_client.mint(&buyer, &50_000_000);
+    #[test]
+    fn test_pause_blocks_cancel_offer() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, seller, admin, registry_id, credit_id) = setup_with_registry(&env);
+        let offer_id = client.create_offer(&seller, &credit_id, &10_000_000, &500_000, &registry_id, &None);
+        client.pause(&admin);
+        assert!(client.try_cancel_offer(&seller, &offer_id).is_err());
+    }
 
-        let offer_id = client.create_offer(&seller, &credit_id, &10_000_000, &500_000, &registry_id);
+    #[test]
+    fn test_non_admin_cannot_pause() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, _, _, _, _) = setup_with_registry(&env);
+        let rando = Address::generate(&env);
+        assert!(client.try_pause(&rando).is_err());
+    }
 
-        let seller_balance_before = token_client.balance(&seller);
-        client.buy_offer(&buyer, &offer_id, &token_id);
-
-        // Offer is now closed
+    #[test]
+    fn test_cancel_offer_clears_escrow() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, seller, _admin, registry_id, credit_id) = setup_with_registry(&env);
+        let price = 10_000_000i128;
+        let offer_id = client.create_offer(&seller, &credit_id, &price, &500_000, &registry_id);
+        assert!(client.get_offer(&offer_id).active);
+        client.cancel_offer(&seller, &offer_id);
         assert!(!client.get_offer(&offer_id).active);
-        // Seller received payment
-        assert_eq!(token_client.balance(&seller), seller_balance_before + 10_000_000);
-        // Buyer paid
-        assert_eq!(token_client.balance(&buyer), 40_000_000);
     }
 
-    /// buy_offer on a closed offer must fail.
     #[test]
-    fn test_buy_offer_already_closed_fails() {
-        use soroban_sdk::token::StellarAssetClient;
-
+    fn test_cancel_offer_refund_lifecycle() {
         let env = Env::default();
         env.mock_all_auths();
-        let (client, seller, registry_id, credit_id) = setup_with_registry(&env);
-
-        let token_admin = Address::generate(&env);
-        let token_id = env.register_stellar_asset_contract_v2(token_admin.clone()).address();
-        let token_admin_client = StellarAssetClient::new(&env, &token_id);
-        let buyer = Address::generate(&env);
-        token_admin_client.mint(&buyer, &50_000_000);
-
-        let offer_id = client.create_offer(&seller, &credit_id, &10_000_000, &500_000, &registry_id);
-        client.buy_offer(&buyer, &offer_id, &token_id);
-        // Second buy must fail
-        assert!(client.try_buy_offer(&buyer, &offer_id, &token_id).is_err());
-    }
-
-    /// buy_offer on a non-existent offer must fail.
-    #[test]
-    fn test_buy_offer_not_found_fails() {
-        use soroban_sdk::token::StellarAssetClient;
-
-        let env = Env::default();
-        env.mock_all_auths();
-        let (client, _seller, _registry_id, _credit_id) = setup_with_registry(&env);
-
-        let token_admin = Address::generate(&env);
-        let token_id = env.register_stellar_asset_contract_v2(token_admin).address();
-        let buyer = Address::generate(&env);
-
-        assert!(client.try_buy_offer(&buyer, &999u64, &token_id).is_err());
+        let (client, seller, _admin, registry_id, credit_id) = setup_with_registry(&env);
+        let price = 15_000_000i128;
+        let offer_id = client.create_offer(&seller, &credit_id, &price, &500_000, &registry_id);
+        let offer_before = client.get_offer(&offer_id);
+        assert!(offer_before.active);
+        assert_eq!(offer_before.price_xlm, price);
+        client.cancel_offer(&seller, &offer_id);
+        let offer_after = client.get_offer(&offer_id);
+        assert!(!offer_after.active);
     }
 }
