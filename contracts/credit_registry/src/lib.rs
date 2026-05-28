@@ -1591,4 +1591,17 @@ impl CreditRegistry {
         let result = client.try_split_credit(&issuer, &id, &1_000_000, &nonce);
         assert!(result.is_err());
     }
+
+    #[test]
+    fn test_get_session_operation_count_returns_error_for_missing_session() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(CreditRegistry, ());
+        let client = CreditRegistryClient::new(&env, &contract_id);
+        let fake_session_id = BytesN::from_array(&env, &[0u8; 32]);
+
+        let result = client.try_get_session_operation_count(&fake_session_id);
+
+        assert_eq!(result, Err(CarbonChainError::SessionNotFound));
+    }
 }
