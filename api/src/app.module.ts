@@ -4,6 +4,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import * as Joi from 'joi';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { CacheModule } from './common/cache.module';
 import { StellarModule } from './stellar/stellar.module';
 import { CreditsModule } from './credits/credits.module';
 import { ProjectsModule } from './projects/projects.module';
@@ -33,6 +34,7 @@ import { WebhooksModule } from './webhooks/webhooks.module';
       },
     }),
     ScheduleModule.forRoot(),
+    CacheModule,
     StellarModule,
     CreditsModule,
     ProjectsModule,

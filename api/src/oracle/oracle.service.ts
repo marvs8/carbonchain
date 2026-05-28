@@ -60,15 +60,7 @@ export class OracleService {
       nativeToScVal(dto.oraclePublicKey, { type: 'address' }),
       nativeToScVal(dto.projectId, { type: 'string' }),
       nativeToScVal(BigInt(dto.tonnesSequestered), { type: 'i128' }),
-    ];
-
-    const signer = this.keypairService.getAdminKeypair();
-    const response = await this.stellarService.invokeContract(
-      this.contractId,
-      'update_mrv_data',
-      args,
-      signer,
-    );
+          nativeToScVal(BigInt(Math.floor(Date.now() / 1000)), { type: 'u64' }),
 
     const rv = (response as unknown as Record<string, unknown>).returnValue;
     const anomaly = rv

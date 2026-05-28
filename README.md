@@ -233,38 +233,53 @@ git clone git@github.com:legend-esc/carbonchain.git
 cd carbonchain
 ```
 
-### 2. Install dependencies
-
-```bash
-# Backend
-cd api && npm install
-
-# Frontend
-cd ../frontend && npm install
-```
-
-### 3. Start local services
-
-```bash
-# PostgreSQL via Docker
-docker compose up -d postgres
-
-# Run database migrations
-cd api && npm run migration:run
-```
-
-### 4. Configure environment variables
+### 2. Configure environment variables
 
 ```bash
 cp api/.env.example api/.env
-cp frontend/src/environments/environment.example.ts \
-   frontend/src/environments/environment.ts
-# Fill in values — see Environment Variables below
+# Fill in ADMIN_SECRET_KEY, JWT_SECRET, and contract IDs — see Environment Variables below
 ```
 
-### 5. Start development servers
+### 3. Start the full stack with Docker Compose
+
+The `docker-compose.yml` starts all four services (PostgreSQL, Redis, API, Frontend) in the correct dependency order with health checks:
 
 ```bash
+docker compose up -d
+```
+
+| Service  | URL                          | Description                  |
+|----------|------------------------------|------------------------------|
+| Frontend | http://localhost:4200        | Angular SPA (nginx)          |
+| API      | http://localhost:3000        | NestJS REST API              |
+| Postgres | localhost:5432               | PostgreSQL 16                |
+| Redis    | localhost:6379               | Redis 7 (cache + rate limit) |
+
+Check service health:
+
+```bash
+docker compose ps
+docker compose logs -f api
+```
+
+### 4. Run database migrations
+
+```bash
+cd api && npm run migration:run
+```
+
+### 5. (Optional) Local development without Docker
+
+If you prefer to run services individually:
+
+```bash
+# Start only the backing services
+docker compose up -d postgres redis
+
+# Install dependencies
+cd api && npm install
+cd ../frontend && npm install
+
 # Terminal 1 — NestJS API (port 3000)
 cd api && npm run start:dev
 

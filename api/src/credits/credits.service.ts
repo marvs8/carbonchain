@@ -13,6 +13,12 @@ import type {
 import {
   CREDIT_REPOSITORY,
 } from './credit.repository';
+import { CacheService } from '../common/cache.service';
+
+// Cache key helpers
+const CREDIT_KEY = (id: string) => `credits:${id}`;
+const LIST_CREDITS_KEY = (filter: string) => `credits:list:${filter}`;
+const CREDIT_TTL = 120; // seconds
 
 export class IssueCreditDto {
   issuerPublicKey: string;
@@ -46,6 +52,7 @@ export class CreditsService {
     private configService: ConfigService,
     private keypairService: StellarKeypairService,
     @Inject(CREDIT_REPOSITORY) private readonly creditRepo: ICreditRepository,
+    private readonly cache: CacheService,
   ) {
     this.contractId =
       this.configService.get<string>('CREDIT_REGISTRY_CONTRACT_ID') || '';
@@ -96,11 +103,22 @@ export class CreditsService {
   }
 
   async getCredit(creditId: string): Promise<CreditMetadata> {
-    // Try off-chain index first
-    const cached = await this.creditRepo.findById(creditId);
-    if (cached) return this.entityToMetadata(cached);
+    // 1. Try Redis cache
+    const cached = await this.cache.get<CreditMetadata>(CREDIT_KEY(creditId));
+    if (cached) {
+      this.logger.debug(`Cache HIT for credit ${creditId}`);
+      return cached;
+    }
 
-    // Fall back to on-chain read
+    // 2. Try off-chain index
+    const indexed = await this.creditRepo.findById(creditId);
+    if (indexed) {
+      const metadata = this.entityToMetadata(indexed);
+      await this.cache.set(CREDIT_KEY(creditId), metadata, CREDIT_TTL);
+      return metadata;
+    }
+
+    // 3. Fall back to on-chain read
     try {
       this.logger.log(`Fetching credit metadata for ID: ${creditId}`);
       const args = [
@@ -116,7 +134,9 @@ export class CreditsService {
           `Credit with ID ${creditId} not found on-chain`,
         );
       const native = scValToNative(retval);
-      return this.mapToCreditMetadata(creditId, native);
+      const metadata = this.mapToCreditMetadata(creditId, native);
+      await this.cache.set(CREDIT_KEY(creditId), metadata, CREDIT_TTL);
+      return metadata;
     } catch (error: unknown) {
       this.logger.error(
         `Failed to fetch credit ${creditId}: ${(error as Error).message}`,
@@ -154,6 +174,18 @@ export class CreditsService {
     filter: ListCreditsFilter,
   ): Promise<{ data: CreditMetadata[]; total: number; page: number; limit: number }> {
     this.logger.log(`Listing credits with filters: ${JSON.stringify(filter)}`);
+
+    const cacheKey = LIST_CREDITS_KEY(JSON.stringify(filter));
+    const cachedResult = await this.cache.get<{
+      data: CreditMetadata[];
+      total: number;
+      page: number;
+      limit: number;
+    }>(cacheKey);
+    if (cachedResult) {
+      this.logger.debug(`Cache HIT for list credits`);
+      return cachedResult;
+    }
 
     // For now, return empty results as we don't have a list_all_credits contract method
     // In production, this would query the blockchain or an indexed database
@@ -199,7 +231,19 @@ export class CreditsService {
     const end = start + filter.limit;
     const data = filtered.slice(start, end);
 
-    return { data, total, page: filter.page, limit: filter.limit };
+    const result = { data, total, page: filter.page, limit: filter.limit };
+    await this.cache.set(cacheKey, result, CREDIT_TTL);
+    return result;
+  }
+
+  /**
+   * Invalidate all cached entries for a specific credit and the list cache.
+   * Call this whenever a credit's status changes (approve, retire, flag).
+   */
+  async invalidateCreditCache(creditId: string): Promise<void> {
+    await this.cache.del(CREDIT_KEY(creditId));
+    await this.cache.delPattern('credits:list:*');
+    this.logger.debug(`Cache invalidated for credit ${creditId}`);
   }
 
   async listCreditsByProject(projectId: string): Promise<string[]> {

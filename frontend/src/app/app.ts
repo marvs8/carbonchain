@@ -5,11 +5,12 @@ import { LocaleSwitcherComponent } from './core/components/locale-switcher.compo
 import { ThemeService } from './core/services/theme.service';
 import { TranslationService } from './core/services/translation.service';
 import { TranslatePipe } from './core/pipes/translate.pipe';
+import { ToastComponent } from './shared/components/toast.component';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet, RouterLink, ConnectWalletComponent, LocaleSwitcherComponent, TranslatePipe],
+  imports: [RouterOutlet, RouterLink, ConnectWalletComponent, LocaleSwitcherComponent, TranslatePipe, ToastComponent],
   templateUrl: './app.html',
   styleUrl: './app.css',
 })

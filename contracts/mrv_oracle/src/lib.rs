@@ -49,7 +49,8 @@ pub enum OracleError {
     ProjectNotFound    = 124,
     InvalidNonce       = 125,
     InvalidProject     = 126,
-    NoPendingAdmin     = 127,
+    InvalidTimestamp   = 127,
+    NoPendingAdmin     = 128,
 }
 
 // Maximum MRV history entries retained per project (ring-buffer eviction).
@@ -142,12 +143,14 @@ impl MrvOracle {
     /// - [`OracleError::ContractPaused`] — contract is paused.
     /// - [`OracleError::Unauthorized`] — `oracle` is not a registered oracle address.
     /// - [`OracleError::InvalidNonce`] — `nonce` does not match the current oracle nonce.
+    /// - [`OracleError::InvalidTimestamp`] — `timestamp` is later than the current ledger timestamp.
     /// - [`OracleError::Overflow`] — anomaly calculation overflowed (extremely large `tonnes` value).
     pub fn update_mrv_data(
         env: Env,
         oracle: Address,
         project_id: String,
         tonnes: i128,
+        timestamp: u64,
         registry_id: Address,
         nonce: u64,
     ) -> Result<bool, OracleError> {
@@ -160,6 +163,9 @@ impl MrvOracle {
         }
         if !Self::consume_nonce(&env, &oracle, nonce) {
             return Err(OracleError::InvalidNonce);
+        }
+        if timestamp > env.ledger().timestamp() {
+            return Err(OracleError::InvalidTimestamp);
         }
 
         // Validate project exists in registry
@@ -178,7 +184,7 @@ impl MrvOracle {
             oracle: oracle.clone(),
             project_id: project_id.clone(),
             tonnes,
-            recorded_at: env.ledger().timestamp(),
+            recorded_at: timestamp,
             anomaly,
         };
 
@@ -422,7 +428,7 @@ mod tests {
         let (env, client, oracle, registry_id, _admin) = setup();
         let proj = String::from_str(&env, "PROJ-001");
         let nonce = client.get_nonce(&oracle);
-        client.update_mrv_data(&oracle, &proj, &1_000_000, &nonce);
+        client.update_mrv_data(&oracle, &proj, &1_000_000, &env.ledger().timestamp(), &nonce);
         let latest = client.get_latest(&proj).unwrap().unwrap();
         assert_eq!(latest.tonnes, 1_000_000);
         assert!(!latest.anomaly);
@@ -433,9 +439,9 @@ mod tests {
         let (env, client, oracle, registry_id, _admin) = setup();
         let proj = String::from_str(&env, "PROJ-001");
         let nonce = client.get_nonce(&oracle);
-        client.update_mrv_data(&oracle, &proj, &1_000_000, &registry_id, &nonce);
+        client.update_mrv_data(&oracle, &proj, &1_000_000, &env.ledger().timestamp(), &registry_id, &nonce);
         let nonce2 = client.get_nonce(&oracle);
-        client.update_mrv_data(&oracle, &proj, &1_050_000, &registry_id, &nonce2);
+        client.update_mrv_data(&oracle, &proj, &1_050_000, &env.ledger().timestamp(), &registry_id, &nonce2);
         assert_eq!(client.get_history(&proj).len(), 2);
     }
 
@@ -444,9 +450,9 @@ mod tests {
         let (env, client, oracle, registry_id, _admin) = setup();
         let proj = String::from_str(&env, "PROJ-001");
         let nonce = client.get_nonce(&oracle);
-        client.update_mrv_data(&oracle, &proj, &1_000_000, &registry_id, &nonce);
+        client.update_mrv_data(&oracle, &proj, &1_000_000, &env.ledger().timestamp(), &registry_id, &nonce);
         let nonce2 = client.get_nonce(&oracle);
-        let anomaly = client.update_mrv_data(&oracle, &proj, &1_500_000, &registry_id, &nonce2);
+        let anomaly = client.update_mrv_data(&oracle, &proj, &1_500_000, &env.ledger().timestamp(), &registry_id, &nonce2);
         assert!(anomaly);
         assert!(client.get_latest(&proj).unwrap().unwrap().anomaly);
     }
@@ -456,9 +462,9 @@ mod tests {
         let (env, client, oracle, registry_id, _admin) = setup();
         let proj = String::from_str(&env, "PROJ-001");
         let nonce = client.get_nonce(&oracle);
-        client.update_mrv_data(&oracle, &proj, &1_000_000, &registry_id, &nonce);
+        client.update_mrv_data(&oracle, &proj, &1_000_000, &env.ledger().timestamp(), &registry_id, &nonce);
         let nonce2 = client.get_nonce(&oracle);
-        let anomaly = client.update_mrv_data(&oracle, &proj, &1_100_000, &registry_id, &nonce2);
+        let anomaly = client.update_mrv_data(&oracle, &proj, &1_100_000, &env.ledger().timestamp(), &registry_id, &nonce2);
         assert!(!anomaly);
     }
 
@@ -468,7 +474,7 @@ mod tests {
         let proj = String::from_str(&env, "PROJ-001");
         let rogue = Address::generate(&env);
         let nonce = client.get_nonce(&rogue);
-        assert!(client.try_update_mrv_data(&rogue, &proj, &1_000_000, &registry_id, &nonce).is_err());
+        assert!(client.try_update_mrv_data(&rogue, &proj, &1_000_000, &env.ledger().timestamp(), &registry_id, &nonce).is_err());
     }
 
     #[test]
@@ -476,7 +482,17 @@ mod tests {
         let (env, client, oracle, registry_id, _admin) = setup();
         let proj = String::from_str(&env, "PROJ-NONEXISTENT");
         let nonce = client.get_nonce(&oracle);
-        assert!(client.try_update_mrv_data(&oracle, &proj, &1_000_000, &registry_id, &nonce).is_err());
+        assert!(client.try_update_mrv_data(&oracle, &proj, &1_000_000, &env.ledger().timestamp(), &registry_id, &nonce).is_err());
+    }
+
+    #[test]
+    fn test_future_timestamp_rejected() {
+        let (env, client, oracle, registry_id, _admin) = setup();
+        let proj = String::from_str(&env, "PROJ-001");
+        let future_ts = env.ledger().timestamp() + 3600;
+        let nonce = client.get_nonce(&oracle);
+        let err = client.try_update_mrv_data(&oracle, &proj, &1_000_000, &future_ts, &registry_id, &nonce);
+        assert!(err.is_err());
     }
 
     #[test]
@@ -485,7 +501,7 @@ mod tests {
         let proj = String::from_str(&env, "PROJ-CAP");
         for i in 0..=MAX_HISTORY {
             let nonce = client.get_nonce(&oracle);
-            client.update_mrv_data(&oracle, &proj, &(i as i128 * 1_000), &registry_id, &nonce);
+            client.update_mrv_data(&oracle, &proj, &(i as i128 * 1_000), &env.ledger().timestamp(), &registry_id, &nonce);
         }
         let history = client.get_history(&proj);
         assert_eq!(history.len(), MAX_HISTORY);
@@ -553,7 +569,8 @@ mod tests {
         client.pause(&admin);
         assert!(client.paused());
         let proj = String::from_str(&env, "PROJ-001");
-        assert!(client.try_update_mrv_data(&oracle, &proj, &1_000_000, &registry_id).is_err());
+        let nonce = client.get_nonce(&oracle);
+        assert!(client.try_update_mrv_data(&oracle, &proj, &1_000_000, &env.ledger().timestamp(), &registry_id, &nonce).is_err());
     }
 
     #[test]
@@ -563,7 +580,8 @@ mod tests {
         client.unpause(&admin);
         assert!(!client.paused());
         let proj = String::from_str(&env, "PROJ-001");
-        assert!(client.try_update_mrv_data(&oracle, &proj, &1_000_000, &registry_id).is_ok());
+        let nonce = client.get_nonce(&oracle);
+        assert!(client.try_update_mrv_data(&oracle, &proj, &1_000_000, &env.ledger().timestamp(), &registry_id, &nonce).is_ok());
     }
 
     #[test]
@@ -580,13 +598,13 @@ mod tests {
         
         // Record three data points
         let nonce1 = client.get_nonce(&oracle);
-        client.update_mrv_data(&oracle, &proj, &1_000_000, &nonce1);
+        client.update_mrv_data(&oracle, &proj, &1_000_000, &env.ledger().timestamp(), &nonce1);
         
         let nonce2 = client.get_nonce(&oracle);
-        client.update_mrv_data(&oracle, &proj, &2_000_000, &nonce2);
+        client.update_mrv_data(&oracle, &proj, &2_000_000, &env.ledger().timestamp(), &nonce2);
         
         let nonce3 = client.get_nonce(&oracle);
-        client.update_mrv_data(&oracle, &proj, &3_000_000, &nonce3);
+        client.update_mrv_data(&oracle, &proj, &3_000_000, &env.ledger().timestamp(), &nonce3);
 
         // Get aggregate over full range
         let (sum, avg) = client.get_mrv_aggregate(&proj, &0, &u64::MAX);
@@ -600,7 +618,7 @@ mod tests {
         let proj = String::from_str(&env, "PROJ-EMPTY");
         
         let nonce = client.get_nonce(&oracle);
-        client.update_mrv_data(&oracle, &proj, &1_000_000, &nonce);
+        client.update_mrv_data(&oracle, &proj, &1_000_000, &env.ledger().timestamp(), &nonce);
 
         // Query outside the recorded time range
         let (sum, avg) = client.get_mrv_aggregate(&proj, &0, &1);

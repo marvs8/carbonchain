@@ -4,6 +4,7 @@ import { StellarService } from '../stellar/stellar.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { rpc } from '@stellar/stellar-sdk';
+import { CacheService } from '../common/cache.service';
 
 export interface SorobanEvent {
   id: string;
@@ -13,6 +14,14 @@ export interface SorobanEvent {
   timestamp: number;
   data: Record<string, unknown>;
 }
+
+/** Event types that indicate a credit status change — invalidate cache on these. */
+const CREDIT_STATUS_CHANGE_EVENTS = new Set([
+  'CreditMinted',
+  'CreditRetired',
+  'CreditFlagged',
+  'CreditRevoked',
+]);
 
 @Injectable()
 export class EventsService implements OnModuleInit {
@@ -24,6 +33,7 @@ export class EventsService implements OnModuleInit {
     private stellarService: StellarService,
     private configService: ConfigService,
     private webhooksService: WebhooksService,
+    private readonly cache: CacheService,
   ) {}
 
   onModuleInit() {
@@ -73,6 +83,16 @@ export class EventsService implements OnModuleInit {
         this.logger.debug(
           `Indexed event: ${sorobanEvent.type} from contract ${contractId}`,
         );
+
+        // Invalidate credit cache on status-change events
+        if (CREDIT_STATUS_CHANGE_EVENTS.has(sorobanEvent.type)) {
+          const creditId = sorobanEvent.data['credit_id'] as string | undefined;
+          if (creditId) {
+            await this.cache.del(`credits:${creditId}`);
+          }
+          await this.cache.delPattern('credits:list:*');
+          this.logger.debug(`Cache invalidated after event: ${sorobanEvent.type}`);
+        }
 
         // Trigger webhooks for this event
         await this.webhooksService.triggerWebhooks(
