@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { CreditEntity } from './credit.entity';
+import { CreditStatus } from '../shared';
 
 export interface PageResult<T> {
   data: T[];
@@ -13,6 +14,11 @@ export interface ICreditRepository {
   findById(id: string): Promise<CreditEntity | undefined>;
   findByProject(projectId: string, page: number, limit: number): Promise<PageResult<CreditEntity>>;
   findAll(page: number, limit: number): Promise<PageResult<CreditEntity>>;
+  /**
+   * Return a paginated list of credits whose status matches `status`.
+   * When `status` is omitted the caller is responsible for applying a default.
+   */
+  findByStatus(status: CreditStatus, page: number, limit: number): Promise<PageResult<CreditEntity>>;
 }
 
 export const CREDIT_REPOSITORY = 'CREDIT_REPOSITORY';
@@ -41,6 +47,11 @@ export class InMemoryCreditRepository implements ICreditRepository {
 
   async findAll(page: number, limit: number): Promise<PageResult<CreditEntity>> {
     return this.paginate(Array.from(this.store.values()), page, limit);
+  }
+
+  async findByStatus(status: CreditStatus, page: number, limit: number): Promise<PageResult<CreditEntity>> {
+    const all = Array.from(this.store.values()).filter((c) => c.status === status);
+    return this.paginate(all, page, limit);
   }
 
   private paginate(items: CreditEntity[], page: number, limit: number): PageResult<CreditEntity> {

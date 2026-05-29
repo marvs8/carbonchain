@@ -173,9 +173,14 @@ export class CreditsService {
   async listCredits(
     filter: ListCreditsFilter,
   ): Promise<{ data: CreditMetadata[]; total: number; page: number; limit: number }> {
-    this.logger.log(`Listing credits with filters: ${JSON.stringify(filter)}`);
+    // Default to Active-only when no status is requested, so Retired and Flagged
+    // credits are never included unless the caller explicitly opts in.
+    const effectiveStatus: string = filter.status ?? CreditStatus.Active;
+    const effectiveFilter = { ...filter, status: effectiveStatus };
 
-    const cacheKey = LIST_CREDITS_KEY(JSON.stringify(filter));
+    this.logger.log(`Listing credits with filters: ${JSON.stringify(effectiveFilter)}`);
+
+    const cacheKey = LIST_CREDITS_KEY(JSON.stringify(effectiveFilter));
     const cachedResult = await this.cache.get<{
       data: CreditMetadata[];
       total: number;
@@ -187,33 +192,42 @@ export class CreditsService {
       return cachedResult;
     }
 
-    // For now, return empty results as we don't have a list_all_credits contract method
-    // In production, this would query the blockchain or an indexed database
-    const allCredits: CreditMetadata[] = [];
+    // Resolve the requested status to a CreditStatus enum value so we can
+    // delegate the primary filter to the repository (avoids a full table scan
+    // when a DB-backed repo is wired in).
+    const statusEnum = Object.values(CreditStatus).find(
+      (v) => v.toLowerCase() === effectiveStatus.toLowerCase(),
+    ) as CreditStatus | undefined;
 
-    // Apply filters
-    let filtered = allCredits;
+    // Fetch all credits matching the status from the off-chain index.
+    // Use a large page size here; the repository handles the actual storage scan.
+    // Secondary filters (methodology, geography, etc.) are applied in-memory below.
+    let candidates: CreditMetadata[];
+    if (statusEnum) {
+      const repoResult = await this.creditRepo.findByStatus(statusEnum, 1, 10_000);
+      candidates = repoResult.data.map((e) => this.entityToMetadata(e));
+    } else {
+      // Unknown status value — return empty rather than leaking all records.
+      candidates = [];
+    }
+
+    // Apply secondary filters
+    let filtered = candidates;
 
     if (filter.methodology) {
       filtered = filtered.filter(
-        (c) => c.methodology.toLowerCase() === filter.methodology?.toLowerCase(),
+        (c) => c.methodology.toLowerCase() === filter.methodology!.toLowerCase(),
       );
     }
 
     if (filter.geography) {
       filtered = filtered.filter(
-        (c) => c.geography.toLowerCase() === filter.geography?.toLowerCase(),
+        (c) => c.geography.toLowerCase() === filter.geography!.toLowerCase(),
       );
     }
 
     if (filter.vintageYear) {
       filtered = filtered.filter((c) => c.vintage_year === filter.vintageYear);
-    }
-
-    if (filter.status) {
-      filtered = filtered.filter(
-        (c) => c.status.toLowerCase() === filter.status?.toLowerCase(),
-      );
     }
 
     if (filter.minTonnes) {
@@ -228,8 +242,7 @@ export class CreditsService {
 
     const total = filtered.length;
     const start = (filter.page - 1) * filter.limit;
-    const end = start + filter.limit;
-    const data = filtered.slice(start, end);
+    const data = filtered.slice(start, start + filter.limit);
 
     const result = { data, total, page: filter.page, limit: filter.limit };
     await this.cache.set(cacheKey, result, CREDIT_TTL);
