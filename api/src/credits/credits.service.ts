@@ -173,7 +173,10 @@ export class CreditsService {
   async listCredits(
     filter: ListCreditsFilter,
   ): Promise<{ data: CreditMetadata[]; total: number; page: number; limit: number }> {
-    this.logger.log(`Listing credits with filters: ${JSON.stringify(filter)}`);
+    // Default to Active-only when no status is requested, so Retired and Flagged
+    // credits are never included unless the caller explicitly opts in.
+    const effectiveStatus: string = filter.status ?? CreditStatus.Active;
+    const effectiveFilter = { ...filter, status: effectiveStatus };
 
     // Default to Active when client does not provide a status filter
     if (!filter.status) {
@@ -203,29 +206,23 @@ export class CreditsService {
       allCredits = [];
     }
 
-    // Apply filters
-    let filtered = allCredits;
+    // Apply secondary filters
+    let filtered = candidates;
 
     if (filter.methodology) {
       filtered = filtered.filter(
-        (c) => c.methodology.toLowerCase() === filter.methodology?.toLowerCase(),
+        (c) => c.methodology.toLowerCase() === filter.methodology!.toLowerCase(),
       );
     }
 
     if (filter.geography) {
       filtered = filtered.filter(
-        (c) => c.geography.toLowerCase() === filter.geography?.toLowerCase(),
+        (c) => c.geography.toLowerCase() === filter.geography!.toLowerCase(),
       );
     }
 
     if (filter.vintageYear) {
       filtered = filtered.filter((c) => c.vintage_year === filter.vintageYear);
-    }
-
-    if (filter.status) {
-      filtered = filtered.filter(
-        (c) => c.status.toLowerCase() === filter.status?.toLowerCase(),
-      );
     }
 
     if (filter.minTonnes) {
@@ -240,8 +237,7 @@ export class CreditsService {
 
     const total = filtered.length;
     const start = (filter.page - 1) * filter.limit;
-    const end = start + filter.limit;
-    const data = filtered.slice(start, end);
+    const data = filtered.slice(start, start + filter.limit);
 
     const result = { data, total, page: filter.page, limit: filter.limit };
     await this.cache.set(cacheKey, result, CREDIT_TTL);
