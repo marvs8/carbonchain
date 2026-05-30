@@ -175,6 +175,11 @@ export class CreditsService {
   ): Promise<{ data: CreditMetadata[]; total: number; page: number; limit: number }> {
     this.logger.log(`Listing credits with filters: ${JSON.stringify(filter)}`);
 
+    // Default to Active when client does not provide a status filter
+    if (!filter.status) {
+      filter.status = CreditStatus.Active;
+    }
+
     const cacheKey = LIST_CREDITS_KEY(JSON.stringify(filter));
     const cachedResult = await this.cache.get<{
       data: CreditMetadata[];
@@ -187,9 +192,16 @@ export class CreditsService {
       return cachedResult;
     }
 
-    // For now, return empty results as we don't have a list_all_credits contract method
-    // In production, this would query the blockchain or an indexed database
-    const allCredits: CreditMetadata[] = [];
+    // Fetch all credits from the off-chain repository and map to metadata.
+    // Use a large limit to retrieve the full index for server-side filtering.
+    let allCredits: CreditMetadata[] = [];
+    try {
+      const repoResult = await this.creditRepo.findAll(1, 1000000);
+      allCredits = repoResult.data.map((e) => this.entityToMetadata(e));
+    } catch (err) {
+      this.logger.warn(`Failed to fetch credits from repo: ${(err as Error).message}`);
+      allCredits = [];
+    }
 
     // Apply filters
     let filtered = allCredits;
