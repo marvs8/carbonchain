@@ -1,5 +1,7 @@
 import { IsString, IsNotEmpty, IsInt, Min, Max, IsNumberString } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { IsValidMethodology } from '../validators/methodology.validator';
+import { VALID_METHODOLOGIES } from '../methodologies';
 
 export class IssueCreditDto {
   @ApiProperty({ example: 'GABC...XYZ', description: 'Stellar public key of the issuer' })
@@ -18,9 +20,13 @@ export class IssueCreditDto {
   @Max(2100)
   vintageYear: number;
 
-  @ApiProperty({ example: 'VCS' })
+  @ApiProperty({
+    example: 'VCS',
+    description: `One of: ${VALID_METHODOLOGIES.join(', ')}, or a valid custom methodology`,
+  })
   @IsString()
   @IsNotEmpty()
+  @IsValidMethodology({ message: 'Invalid methodology' })
   methodology: string;
 
   @ApiProperty({ example: 'NG', description: 'ISO 3166-1 alpha-2 country code' })

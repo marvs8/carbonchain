@@ -308,6 +308,7 @@ impl CreditRegistry {
     /// - [`CarbonChainError::NotInitialized`] — contract has not been initialised.
     /// - [`CarbonChainError::ContractPaused`] — contract is paused.
     /// - [`CarbonChainError::InvalidNonce`] — `nonce` does not match the current issuer nonce.
+    /// - [`CarbonChainError::InvalidMetadata`] — `methodology` is not registered, `vintage_year` is outside valid range, or `geography` is too short.
     /// - [`CarbonChainError::InvalidTonnes`] — `tonnes` is zero, negative, or exceeds the upper bound.
     pub fn submit_credit(
         env: Env,
@@ -338,7 +339,7 @@ impl CreditRegistry {
             return Err(CarbonChainError::IssuerNotAllowed);
         }
         if !is_methodology_valid(&env, &methodology) {
-            return Err(CarbonChainError::InvalidMethodology);
+            return Err(CarbonChainError::InvalidMetadata);
         }
         if tonnes <= 0 {
             return Err(CarbonChainError::InvalidTonnes);
