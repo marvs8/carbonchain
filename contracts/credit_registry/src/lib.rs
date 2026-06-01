@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, Env, Address, String, BytesN, Vec, symbol_short};
+use soroban_sdk::{contract, contractimpl, Env, Address, String, BytesN, Vec, Symbol, symbol_short};
 use soroban_sdk::xdr::ToXdr;
 
 // ── Unit convention ──────────────────────────────────────────────────────────
@@ -49,7 +49,7 @@ use crate::types::{
     ProjectMetadata, Session, AuditLogEntry,
 };
 use crate::events::{
-    credit_submitted, credit_minted, verifier_added, verifier_removed,
+    credit_submitted, credit_minted, verifier_registered, verifier_removed,
     contract_paused, contract_unpaused, credit_transferred, credit_split, batch_retired,
 };
 
@@ -150,7 +150,7 @@ impl CreditRegistry {
         let mut verifiers = get_verifiers(&env);
         verifiers.push_back(verifier.clone());
         set_verifiers(&env, &verifiers);
-        verifier_added(&env, admin, verifier);
+        verifier_registered(&env, admin, verifier);
         Ok(())
     }
 
@@ -1100,6 +1100,29 @@ impl CreditRegistry {
         // page 2, size 2 → last 1
         let p2 = client.list_verifiers_paginated(&2, &2);
         assert_eq!(p2.len(), 1);
+    }
+
+    #[test]
+    fn test_register_verifier_emits_event() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(CreditRegistry, ());
+        let client = CreditRegistryClient::new(&env, &contract_id);
+        let admin = Address::generate(&env);
+        let verifier = Address::generate(&env);
+        let retirement = Address::generate(&env);
+
+        client.initialize(&admin, &retirement, &1);
+        let nonce = client.get_nonce(&admin);
+        client.register_verifier(&admin, &verifier, &nonce);
+
+        let events = env.events().all();
+        assert_eq!(events.len(), 1);
+
+        let (_, topics, data): (_, soroban_sdk::Vec<soroban_sdk::Val>, soroban_sdk::Val) = events.get(0).unwrap();
+        let expected_topic = Symbol::new(&env, "VerifierRegistered");
+        assert_eq!(topics.get(0).unwrap(), expected_topic);
+        assert_eq!(data, verifier.into());
     }
 
     #[test]

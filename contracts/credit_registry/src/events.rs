@@ -43,8 +43,8 @@ pub fn project_registered(env: &Env, project_id: String, owner: Address) {
     env.events().publish(topics, project_id);
 }
 
-pub fn verifier_added(env: &Env, admin: Address, verifier: Address) {
-    let topics = (Symbol::new(env, "verifier_added"), admin);
+pub fn verifier_registered(env: &Env, admin: Address, verifier: Address) {
+    let topics = (Symbol::new(env, "VerifierRegistered"), admin);
     env.events().publish(topics, verifier);
 }
 
