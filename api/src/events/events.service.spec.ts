@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { EventsService } from './events.service';
 import { StellarService } from '../stellar/stellar.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
+import { CacheService } from '../common/cache.service';
 
 describe('EventsService', () => {
   let service: EventsService;
@@ -30,6 +31,15 @@ describe('EventsService', () => {
           useValue: {
             triggerWebhooks: jest.fn(),
             retryFailedDeliveries: jest.fn(),
+          },
+        },
+        {
+          provide: CacheService,
+          useValue: {
+            get: jest.fn().mockResolvedValue(null),
+            set: jest.fn().mockResolvedValue(undefined),
+            del: jest.fn().mockResolvedValue(undefined),
+            delPattern: jest.fn().mockResolvedValue(undefined),
           },
         },
       ],

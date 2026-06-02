@@ -28,6 +28,9 @@ describe('Methodologies', () => {
         'My-Methodology',
         'carbon-offset-2024',
         'Test_Method',
+        'FAKE',
+        'fake',
+        'INVALID_METHOD_NAME',
       ];
 
       customMethodologies.forEach((methodology) => {
@@ -39,9 +42,7 @@ describe('Methodologies', () => {
       const invalidMethodologies = [
         '',
         '""',
-        'redd+', // wrong case
-        'fake',
-        'INVALID_METHOD_NAME',
+        'redd+', // wrong case, contains '+'
       ];
 
       invalidMethodologies.forEach((methodology) => {
@@ -86,7 +87,7 @@ describe('Methodologies', () => {
     it('should return error message for empty string', () => {
       const result = validateMethodology('');
       expect(result).toBeDefined();
-      expect(result).toContain('cannot be empty');
+      expect(result).toContain('non-empty string');
     });
 
     it('should return error message for non-string values', () => {
@@ -95,11 +96,11 @@ describe('Methodologies', () => {
       expect(result).toContain('non-empty string');
     });
 
-    it('should return error message for unrecognized methodology', () => {
-      const result = validateMethodology('UNKNOWN');
+    it('should return error message for unrecognized methodology with special chars', () => {
+      const result = validateMethodology('INVALID!');
       expect(result).toBeDefined();
       expect(result).toContain('Invalid methodology');
-      expect(result).toContain('UNKNOWN');
+      expect(result).toContain('INVALID!');
     });
 
     it('should return error message for wrong case methodology', () => {

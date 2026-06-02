@@ -50,7 +50,7 @@ describe('IssueCreditDto', () => {
       expect(methodologyErrors.length).toBeGreaterThan(0);
     });
 
-    it('should reject invalid methodology like "FAKE"', async () => {
+    it('should accept custom methodology like "FAKE"', async () => {
       const dto = plainToClass(IssueCreditDto, {
         issuerPublicKey: 'GABC123',
         projectId: 'PROJ-001',
@@ -65,7 +65,7 @@ describe('IssueCreditDto', () => {
       const methodologyErrors = errors.filter(
         (e) => e.property === 'methodology',
       );
-      expect(methodologyErrors.length).toBeGreaterThan(0);
+      expect(methodologyErrors).toHaveLength(0);
     });
 
     it('should reject case-sensitive methodology like "redd+"', async () => {
@@ -192,12 +192,12 @@ describe('IssueCreditDto', () => {
       expect(errors).toHaveLength(0);
     });
 
-    it('should reject DTO with invalid methodology and valid other fields', async () => {
+    it('should reject DTO with invalid methodology (contains special chars) and valid other fields', async () => {
       const dto = plainToClass(IssueCreditDto, {
         issuerPublicKey: 'GABC123',
         projectId: 'PROJ-001',
         vintageYear: 2024,
-        methodology: 'INVALID',
+        methodology: 'INVALID!',
         geography: 'NG',
         tonnes: '1000000',
         ipfsHash: 'bafybei123',

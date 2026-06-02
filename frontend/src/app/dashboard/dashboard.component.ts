@@ -2,8 +2,10 @@ import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { CreditStore } from '../core/store/credit.store';
 import { StellarWalletService } from '../core/services/stellar-wallet.service';
-import { CreditStatus } from '@shared';
+import { ApiService } from '../core/services/api.service';
+import { CreditStatus, RetirementRecord } from '@shared';
 import { TranslatePipe } from '../core/pipes/translate.pipe';
+import { firstValueFrom } from 'rxjs';
 
 @Component({
   selector: 'app-dashboard',

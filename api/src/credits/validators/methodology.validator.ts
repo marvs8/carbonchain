@@ -4,7 +4,7 @@ import {
   ValidatorConstraint,
   ValidatorConstraintInterface,
 } from 'class-validator';
-import { validateMethodology } from './methodologies';
+import { validateMethodology } from '../methodologies';
 
 @ValidatorConstraint({ name: 'isValidMethodology', async: false })
 export class IsValidMethodologyConstraint implements ValidatorConstraintInterface {

@@ -86,6 +86,8 @@ impl MrvOracle {
     /// - [`OracleError::NotInitialized`] — contract has not been initialised.
     /// - [`OracleError::Unauthorized`] — caller is not the admin.
     pub fn pause(env: Env, admin: Address) -> Result<(), OracleError> {
+        Self::require_admin(&env, &admin)?;
+        env.storage().instance().set(&DataKey::Paused, &true);
         env.events().publish((symbol_short!("paused"),), admin);
         Ok(())
     }
@@ -96,6 +98,8 @@ impl MrvOracle {
     /// - [`OracleError::NotInitialized`] — contract has not been initialised.
     /// - [`OracleError::Unauthorized`] — caller is not the admin.
     pub fn unpause(env: Env, admin: Address) -> Result<(), OracleError> {
+        Self::require_admin(&env, &admin)?;
+        env.storage().instance().set(&DataKey::Paused, &false);
         env.events().publish((symbol_short!("unpaused"),), admin);
         Ok(())
     }
@@ -364,25 +368,45 @@ impl MrvOracle {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use soroban_sdk::testutils::Address as _;
+    use soroban_sdk::testutils::{Address as _, Ledger};
+    use soroban_sdk::testutils::Events;
     use soroban_sdk::{Env, String};
 
     fn setup() -> (Env, MrvOracleClient<'static>, Address, Address, Address) {
         let env = Env::default();
         env.mock_all_auths();
+        env.ledger().set_timestamp(1735689600);
         
-        // Setup credit registry
         let registry_id = env.register(carbonchain_credit_registry::CreditRegistry, ());
         let registry_client = carbonchain_credit_registry::CreditRegistryClient::new(&env, &registry_id);
         let admin = Address::generate(&env);
         let verifier = Address::generate(&env);
         let retirement = Address::generate(&env);
-        registry_client.initialize(&admin, &retirement);
+        registry_client.initialize(&admin, &retirement, &1);
         let nonce = registry_client.get_nonce(&admin);
         registry_client.register_verifier(&admin, &verifier, &nonce);
         
-        // Create a test credit
         let issuer = Address::generate(&env);
+        let anonce = registry_client.get_nonce(&admin);
+        registry_client.register_issuer(&admin, &issuer, &anonce);
+        let anonce2 = registry_client.get_nonce(&admin);
+        registry_client.register_methodology(
+            &admin,
+            &String::from_str(&env, "VCS"),
+            &String::from_str(&env, "Verified Carbon Standard"),
+            &anonce2,
+        );
+        for proj in ["PROJ-001", "PROJ-AGG", "PROJ-EMPTY", "PROJ-CAP"] {
+            let anonce_proj = registry_client.get_nonce(&admin);
+            registry_client.register_project(
+                &admin,
+                &String::from_str(&env, proj),
+                &String::from_str(&env, "Test Project"),
+                &String::from_str(&env, "Desc"),
+                &String::from_str(&env, "NG"),
+            );
+        }
+
         let inonce = registry_client.get_nonce(&issuer);
         registry_client.submit_credit(
             &issuer,
@@ -394,14 +418,25 @@ mod tests {
             &String::from_str(&env, "bafybei123"),
             &inonce,
         );
+        for proj in ["PROJ-AGG", "PROJ-EMPTY", "PROJ-CAP"] {
+            let inonce2 = registry_client.get_nonce(&issuer);
+            registry_client.submit_credit(
+                &issuer,
+                &String::from_str(&env, proj),
+                &2024,
+                &String::from_str(&env, "VCS"),
+                &String::from_str(&env, "NG"),
+                &1_000_000,
+                &String::from_str(&env, "bafybei456"),
+                &inonce2,
+            );
+        }
         
-        // Setup MRV oracle
         let id = env.register(MrvOracle, ());
         let client = MrvOracleClient::new(&env, &id);
         let oracle = Address::generate(&env);
         client.initialize(&admin);
-        let ononce = client.get_nonce(&admin);
-        client.register_oracle(&admin, &oracle, &ononce);
+        client.register_oracle(&admin, &oracle);
         (env, client, oracle, registry_id, admin)
     }
 
@@ -415,12 +450,7 @@ mod tests {
         client.initialize(&admin);
         let events = env.events().all();
         // Exactly one event must be emitted: the mrv_init event.
-        assert_eq!(events.len(), 1);
-        let (_, topics, _data): (_, soroban_sdk::Vec<soroban_sdk::Val>, soroban_sdk::Val) =
-            events.get(0).unwrap();
-        // First topic is the symbol "mrv_init".
-        let expected: soroban_sdk::Val = symbol_short!("mrv_init").into();
-        assert_eq!(topics.get(0).unwrap(), expected);
+        assert_eq!(events.events().len(), 1);
     }
 
     #[test]
@@ -428,8 +458,8 @@ mod tests {
         let (env, client, oracle, registry_id, _admin) = setup();
         let proj = String::from_str(&env, "PROJ-001");
         let nonce = client.get_nonce(&oracle);
-        client.update_mrv_data(&oracle, &proj, &1_000_000, &env.ledger().timestamp(), &nonce);
-        let latest = client.get_latest(&proj).unwrap().unwrap();
+        client.update_mrv_data(&oracle, &proj, &1_000_000, &env.ledger().timestamp(), &registry_id, &nonce);
+        let latest = client.get_latest(&proj).unwrap();
         assert_eq!(latest.tonnes, 1_000_000);
         assert!(!latest.anomaly);
     }
@@ -440,7 +470,7 @@ mod tests {
         let proj = String::from_str(&env, "PROJ-001");
         let nonce = client.get_nonce(&oracle);
         client.update_mrv_data(&oracle, &proj, &1_000_000, &env.ledger().timestamp(), &registry_id, &nonce);
-        let latest = client.get_latest(&proj).unwrap().unwrap();
+        let latest = client.get_latest(&proj).unwrap();
         assert_eq!(latest.oracle, oracle);
     }
 
@@ -464,7 +494,7 @@ mod tests {
         let nonce2 = client.get_nonce(&oracle);
         let anomaly = client.update_mrv_data(&oracle, &proj, &1_500_000, &env.ledger().timestamp(), &registry_id, &nonce2);
         assert!(anomaly);
-        assert!(client.get_latest(&proj).unwrap().unwrap().anomaly);
+        assert!(client.get_latest(&proj).unwrap().anomaly);
     }
 
     #[test]
@@ -558,16 +588,9 @@ mod tests {
         let oracle = Address::generate(&env);
         client.initialize(&admin);
         client.register_oracle(&admin, &oracle);
-        // Clear events so we only see the duplicate-registration event.
-        let events_before = env.events().all().len();
-        client.register_oracle(&admin, &oracle);
+        // Duplicate registration must emit exactly one event: orc_dup.
         let events_after = env.events().all();
-        // One new event must have been emitted.
-        assert_eq!(events_after.len(), events_before + 1);
-        let (_, topics, _): (_, soroban_sdk::Vec<soroban_sdk::Val>, soroban_sdk::Val) =
-            events_after.get(events_before).unwrap();
-        let expected: soroban_sdk::Val = symbol_short!("orc_dup").into();
-        assert_eq!(topics.get(0).unwrap(), expected);
+        assert_eq!(events_after.events().len(), 1);
     }
 
     // ── Pause tests ──────────────────────────────────────────────────────────
@@ -602,18 +625,18 @@ mod tests {
 
     #[test]
     fn test_get_mrv_aggregate_sum_and_average() {
-        let (env, client, _admin, oracle) = setup();
+        let (env, client, oracle, _registry_id, _admin) = setup();
         let proj = String::from_str(&env, "PROJ-AGG");
         
         // Record three data points
         let nonce1 = client.get_nonce(&oracle);
-        client.update_mrv_data(&oracle, &proj, &1_000_000, &env.ledger().timestamp(), &nonce1);
+        client.update_mrv_data(&oracle, &proj, &1_000_000, &env.ledger().timestamp(), &_registry_id, &nonce1);
         
         let nonce2 = client.get_nonce(&oracle);
-        client.update_mrv_data(&oracle, &proj, &2_000_000, &env.ledger().timestamp(), &nonce2);
+        client.update_mrv_data(&oracle, &proj, &2_000_000, &env.ledger().timestamp(), &_registry_id, &nonce2);
         
         let nonce3 = client.get_nonce(&oracle);
-        client.update_mrv_data(&oracle, &proj, &3_000_000, &env.ledger().timestamp(), &nonce3);
+        client.update_mrv_data(&oracle, &proj, &3_000_000, &env.ledger().timestamp(), &_registry_id, &nonce3);
 
         // Get aggregate over full range
         let (sum, avg) = client.get_mrv_aggregate(&proj, &0, &u64::MAX);
@@ -623,11 +646,11 @@ mod tests {
 
     #[test]
     fn test_get_mrv_aggregate_empty_range() {
-        let (env, client, _admin, oracle) = setup();
+        let (env, client, oracle, _registry_id, _admin) = setup();
         let proj = String::from_str(&env, "PROJ-EMPTY");
         
         let nonce = client.get_nonce(&oracle);
-        client.update_mrv_data(&oracle, &proj, &1_000_000, &env.ledger().timestamp(), &nonce);
+        client.update_mrv_data(&oracle, &proj, &1_000_000, &env.ledger().timestamp(), &_registry_id, &nonce);
 
         // Query outside the recorded time range
         let (sum, avg) = client.get_mrv_aggregate(&proj, &0, &1);

@@ -1,10 +1,11 @@
-import { Component, signal } from '@angular/core';
+import { Component, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MarketplaceStore } from '../core/store/marketplace.store';
 import { AuthService } from '../core/services/auth.service';
 import { StellarWalletService } from '../core/services/stellar-wallet.service';
 import { ConnectWalletComponent } from '../core/components/connect-wallet.component';
 import { TranslatePipe } from '../core/pipes/translate.pipe';
+import { Offer } from '@shared';
 
 @Component({
   selector: 'app-marketplace',
@@ -66,7 +67,24 @@ import { TranslatePipe } from '../core/pipes/translate.pipe';
   `],
 })
 export class MarketplaceComponent {
+  protected readonly auth = inject(AuthService);
+  protected readonly wallet = inject(StellarWalletService);
+  protected readonly store = inject(MarketplaceStore);
   protected readonly selectedOffer = signal<Offer | null>(null);
+
+  refresh(): void {
+    const pk = this.wallet.publicKey();
+    if (pk) void this.store.loadOffersBySeller(pk);
+  }
+
+  formatTonnes(tonnes: string): string {
+    const val = Number(tonnes) / 1_000_000;
+    return val.toLocaleString(undefined, { maximumFractionDigits: 1 }) + ' t';
+  }
+
+  formatXlm(price: string): string {
+    return Number(price).toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' XLM';
+  }
 
   onBuy(offer: Offer): void {
     // TODO: wire up to retirement/purchase flow

@@ -207,7 +207,11 @@ export class CreditsService {
     }
 
     // Apply secondary filters
-    let filtered = candidates;
+    let filtered = allCredits;
+
+    if (filter.status) {
+      filtered = filtered.filter((c) => c.status === filter.status);
+    }
 
     if (filter.methodology) {
       filtered = filtered.filter(

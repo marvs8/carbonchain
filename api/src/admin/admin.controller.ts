@@ -1,7 +1,8 @@
 import { Controller, Get, Post, Param, Body, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { AdminGuard } from './admin.guard';
-import { AdminService, AdminStats, VerifierCapabilities } from './admin.service';
+import { AdminService, AdminStats } from './admin.service';
+import type { VerifierCapabilities } from './admin.service';
 import { CreditStatus } from '../shared';
 
 @UseGuards(AuthGuard('jwt'), AdminGuard)

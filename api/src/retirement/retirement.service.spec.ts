@@ -8,6 +8,8 @@
  */
 import { RetirementService, RetireDto, CreditRetiredEvent, EVENT_EMITTER, IEventEmitter } from './retirement.service';
 import { InMemoryRetirementRepository, RETIREMENT_REPOSITORY } from './retirement.repository';
+import { StellarService } from '../stellar/stellar.service';
+import { StellarKeypairService } from '../stellar/stellar-keypair.service';
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 
@@ -23,15 +25,21 @@ const mockKeypairService = {
   getAdminKeypair: jest.fn().mockReturnValue({}),
 };
 
+const VALID_CONTRACT_ID = 'GCRZUKNU2J5GLSYTZR4OLO7OBJJVHSMVBGG7IVUZU5FXMFHUDCLDGQJX';
+
 const mockConfigService = {
-  get: jest.fn().mockReturnValue(''),
+  get: jest.fn((key: string, def?: string) => {
+    if (key === 'RETIREMENT_CONTRACT_ID') return VALID_CONTRACT_ID;
+    if (key === 'CREDIT_REGISTRY_CONTRACT_ID') return VALID_CONTRACT_ID;
+    return def ?? '';
+  }),
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function makeDto(overrides: Partial<RetireDto> = {}): RetireDto {
   return {
-    buyerPublicKey: 'GBUYER123',
+    buyerPublicKey: 'GCRZUKNU2J5GLSYTZR4OLO7OBJJVHSMVBGG7IVUZU5FXMFHUDCLDGQJX',
     creditId: 'aabbccdd',
     tonnes: '1000000',
     reason: '2024 Scope 3 offset',
@@ -61,8 +69,8 @@ describe('RetirementService — event ordering (issue #162)', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         RetirementService,
-        { provide: 'StellarService', useValue: mockStellarService },
-        { provide: 'StellarKeypairService', useValue: mockKeypairService },
+        { provide: StellarService, useValue: mockStellarService },
+        { provide: StellarKeypairService, useValue: mockKeypairService },
         { provide: ConfigService, useValue: mockConfigService },
         { provide: RETIREMENT_REPOSITORY, useValue: repo },
         { provide: EVENT_EMITTER, useValue: eventEmitter },
@@ -133,7 +141,7 @@ describe('RetirementService — event ordering (issue #162)', () => {
   });
 
   it('CreditRetired event payload contains the correct retirement data', async () => {
-    const dto = makeDto({ creditId: 'deadbeef', tonnes: '500000', buyerPublicKey: 'GBUYER999' });
+    const dto = makeDto({ creditId: 'deadbeef', tonnes: '500000', buyerPublicKey: 'GCRZUKNU2J5GLSYTZR4OLO7OBJJVHSMVBGG7IVUZU5FXMFHUDCLDGQJX' });
 
     await service.retire(dto);
 
@@ -142,7 +150,7 @@ describe('RetirementService — event ordering (issue #162)', () => {
     const payload = event!.payload as CreditRetiredEvent;
     expect(payload.creditId).toBe('deadbeef');
     expect(payload.tonnesRetired).toBe('500000');
-    expect(payload.buyer).toBe('GBUYER999');
+    expect(payload.buyer).toBe('GCRZUKNU2J5GLSYTZR4OLO7OBJJVHSMVBGG7IVUZU5FXMFHUDCLDGQJX');
     expect(typeof payload.retiredAt).toBe('number');
     expect(payload.retiredAt).toBeGreaterThan(0);
   });
@@ -153,7 +161,7 @@ describe('RetirementService — event ordering (issue #162)', () => {
     const record = await repo.findById(retirementId);
     expect(record).toBeDefined();
     expect(record!.creditId).toBe('aabbccdd');
-    expect(record!.buyer).toBe('GBUYER123');
+    expect(record!.buyer).toBe('GCRZUKNU2J5GLSYTZR4OLO7OBJJVHSMVBGG7IVUZU5FXMFHUDCLDGQJX');
     expect(record!.tonnesRetired).toBe('1000000');
   });
 });
