@@ -50,7 +50,9 @@ describe('ProjectsService', () => {
     });
 
     it('uploads documents to Pinata and stores CID', async () => {
-      mockedAxios.post = jest.fn().mockResolvedValue({ data: { IpfsHash: 'bafybeitest123' } });
+      mockedAxios.post = jest
+        .fn()
+        .mockResolvedValue({ data: { IpfsHash: 'bafybeitest123' } });
 
       const project = await service.createProject({
         name: 'REDD+ Project',
@@ -75,7 +77,9 @@ describe('ProjectsService', () => {
     });
 
     it('throws when Pinata upload fails', async () => {
-      mockedAxios.post = jest.fn().mockRejectedValue(new Error('Network error'));
+      mockedAxios.post = jest
+        .fn()
+        .mockRejectedValue(new Error('Network error'));
 
       await expect(
         service.createProject({
@@ -105,14 +109,28 @@ describe('ProjectsService', () => {
     });
 
     it('throws NotFoundException for unknown id', () => {
-      expect(() => service.getProject('nonexistent')).toThrow(NotFoundException);
+      expect(() => service.getProject('nonexistent')).toThrow(
+        NotFoundException,
+      );
     });
   });
 
   describe('listProjects', () => {
     it('returns all projects', async () => {
-      await service.createProject({ name: 'A', developer: 'D', description: 'd', location: 'US', methodology: 'VCS' });
-      await service.createProject({ name: 'B', developer: 'D', description: 'd', location: 'BR', methodology: 'REDD+' });
+      await service.createProject({
+        name: 'A',
+        developer: 'D',
+        description: 'd',
+        location: 'US',
+        methodology: 'VCS',
+      });
+      await service.createProject({
+        name: 'B',
+        developer: 'D',
+        description: 'd',
+        location: 'BR',
+        methodology: 'REDD+',
+      });
 
       expect(service.listProjects()).toHaveLength(2);
     });

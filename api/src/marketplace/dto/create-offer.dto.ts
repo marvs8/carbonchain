@@ -2,7 +2,10 @@ import { IsString, IsNotEmpty, IsNumberString } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateOfferDto {
-  @ApiProperty({ example: 'GABC...XYZ', description: 'Stellar public key of the seller' })
+  @ApiProperty({
+    example: 'GABC...XYZ',
+    description: 'Stellar public key of the seller',
+  })
   @IsString()
   @IsNotEmpty()
   sellerPublicKey: string;
@@ -12,7 +15,10 @@ export class CreateOfferDto {
   @IsNotEmpty()
   creditId: string;
 
-  @ApiProperty({ example: '10000000', description: 'Price in stroops (1 XLM = 10_000_000 stroops)' })
+  @ApiProperty({
+    example: '10000000',
+    description: 'Price in stroops (1 XLM = 10_000_000 stroops)',
+  })
   @IsNumberString()
   @IsNotEmpty()
   priceXlm: string;

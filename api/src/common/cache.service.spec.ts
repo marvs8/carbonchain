@@ -120,7 +120,10 @@ describe('CacheService', () => {
 
   it('del() calls redis DEL with the given keys', async () => {
     await service.del('credits:a', 'credits:b');
-    expect(mockRedisClient.del).toHaveBeenCalledWith(['credits:a', 'credits:b']);
+    expect(mockRedisClient.del).toHaveBeenCalledWith([
+      'credits:a',
+      'credits:b',
+    ]);
   });
 
   it('del() is a no-op when no keys are provided', async () => {
@@ -131,7 +134,10 @@ describe('CacheService', () => {
   // ── delPattern ───────────────────────────────────────────────────────────
 
   it('delPattern() deletes all keys matching the pattern', async () => {
-    mockRedisClient.keys.mockResolvedValue(['credits:list:1', 'credits:list:2']);
+    mockRedisClient.keys.mockResolvedValue([
+      'credits:list:1',
+      'credits:list:2',
+    ]);
     await service.delPattern('credits:list:*');
     expect(mockRedisClient.del).toHaveBeenCalledWith([
       'credits:list:1',

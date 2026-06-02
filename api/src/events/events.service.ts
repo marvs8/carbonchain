@@ -91,7 +91,9 @@ export class EventsService implements OnModuleInit {
             await this.cache.del(`credits:${creditId}`);
           }
           await this.cache.delPattern('credits:list:*');
-          this.logger.debug(`Cache invalidated after event: ${sorobanEvent.type}`);
+          this.logger.debug(
+            `Cache invalidated after event: ${sorobanEvent.type}`,
+          );
         }
 
         // Trigger webhooks for this event
@@ -102,9 +104,7 @@ export class EventsService implements OnModuleInit {
       }
 
       if (events.length > 0) {
-        this.lastLedger = Math.max(
-          ...events.map((e) => e.ledger),
-        );
+        this.lastLedger = Math.max(...events.map((e) => e.ledger));
       }
     } catch (error) {
       this.logger.error(
@@ -129,7 +129,9 @@ export class EventsService implements OnModuleInit {
     return Math.floor(Date.now() / 1000);
   }
 
-  private parseEventData(event: rpc.Api.EventResponse): Record<string, unknown> {
+  private parseEventData(
+    event: rpc.Api.EventResponse,
+  ): Record<string, unknown> {
     return {
       topic: event.topic || [],
       value: event.value || {},

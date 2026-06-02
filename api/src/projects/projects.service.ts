@@ -14,15 +14,18 @@ export class ProjectsService {
   async uploadToIpfs(document: Record<string, unknown>): Promise<string> {
     const apiKey = this.config.get<string>('IPFS_API_KEY', '');
     const secretKey = this.config.get<string>('IPFS_SECRET_KEY', '');
-    const baseUrl = this.config.get<string>('IPFS_API_URL', 'https://api.pinata.cloud');
+    const baseUrl = this.config.get<string>(
+      'IPFS_API_URL',
+      'https://api.pinata.cloud',
+    );
 
     const response = await axios.post<{ IpfsHash: string }>(
       `${baseUrl}/pinning/pinJSONToIPFS`,
       { pinataContent: document },
       {
         headers: {
-          'pinata_api_key': apiKey,
-          'pinata_secret_api_key': secretKey,
+          pinata_api_key: apiKey,
+          pinata_secret_api_key: secretKey,
           'Content-Type': 'application/json',
         },
       },
@@ -31,7 +34,11 @@ export class ProjectsService {
     return response.data.IpfsHash;
   }
 
-  async createProject(data: Omit<ProjectProfile, 'id' | 'documents_cid'> & { documents?: Record<string, unknown> }): Promise<ProjectProfile> {
+  async createProject(
+    data: Omit<ProjectProfile, 'id' | 'documents_cid'> & {
+      documents?: Record<string, unknown>;
+    },
+  ): Promise<ProjectProfile> {
     const id = `proj_${Math.random().toString(36).substring(2, 11)}`;
 
     let documents_cid = '';
@@ -62,7 +69,8 @@ export class ProjectsService {
 
   getProject(id: string): ProjectProfile {
     const project = this.projects.get(id);
-    if (!project) throw new NotFoundException(`Project with ID ${id} not found`);
+    if (!project)
+      throw new NotFoundException(`Project with ID ${id} not found`);
     return project;
   }
 

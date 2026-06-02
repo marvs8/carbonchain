@@ -68,7 +68,10 @@ export class MarketplaceService {
         args,
       );
       if (!retval) return [];
-      const raw = scValToNative(retval) as Array<{ id: bigint; [key: string]: unknown }>;
+      const raw = scValToNative(retval) as Array<{
+        id: bigint;
+        [key: string]: unknown;
+      }>;
       return raw.map((item) => this.mapOffer(Number(item.id), item));
     } catch {
       return [];
@@ -101,7 +104,10 @@ export class MarketplaceService {
   }
 
   async buyOffer(buyerPublicKey: string, offerId: number): Promise<void> {
-    const nativeTokenId = this.configService.get<string>('NATIVE_TOKEN_CONTRACT_ID', '');
+    const nativeTokenId = this.configService.get<string>(
+      'NATIVE_TOKEN_CONTRACT_ID',
+      '',
+    );
     const args = [
       nativeToScVal(buyerPublicKey, { type: 'address' }),
       nativeToScVal(offerId, { type: 'u64' }),

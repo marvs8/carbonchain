@@ -4,7 +4,7 @@ import { signal } from '@angular/core';
 import { authGuard } from './auth.guard';
 import { AuthService } from '../services/auth.service';
 
-function runGuard(): boolean | UrlTree {
+function runGuard() {
   return TestBed.runInInjectionContext(() => authGuard({} as any, {} as any));
 }
 

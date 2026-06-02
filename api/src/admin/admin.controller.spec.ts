@@ -16,9 +16,17 @@ describe('AdminController', () => {
         {
           provide: AdminService,
           useValue: {
-            getStats: jest.fn().mockResolvedValue({ totalCredits: 0, totalRetirements: 0, activeVerifiers: 3 }),
+            getStats: jest.fn().mockResolvedValue({
+              totalCredits: 0,
+              totalRetirements: 0,
+              activeVerifiers: 3,
+            }),
             suspendVerifier: jest.fn().mockResolvedValue({ suspended: true }),
-            flagCredit: jest.fn().mockResolvedValue({ flagged: true, creditId: 'abc', status: CreditStatus.Flagged }),
+            flagCredit: jest.fn().mockResolvedValue({
+              flagged: true,
+              creditId: 'abc',
+              status: CreditStatus.Flagged,
+            }),
           },
         },
       ],
@@ -28,7 +36,7 @@ describe('AdminController', () => {
       .compile();
 
     controller = module.get(AdminController);
-    service = module.get(AdminService) as jest.Mocked<AdminService>;
+    service = module.get(AdminService);
   });
 
   it('GET /admin/stats returns stats', async () => {
@@ -45,7 +53,11 @@ describe('AdminController', () => {
 
   it('POST /admin/credits/:id/flag calls flagCredit', async () => {
     const result = await controller.flagCredit('abc');
-    expect(result).toEqual({ flagged: true, creditId: 'abc', status: CreditStatus.Flagged });
+    expect(result).toEqual({
+      flagged: true,
+      creditId: 'abc',
+      status: CreditStatus.Flagged,
+    });
     expect(service.flagCredit).toHaveBeenCalledWith('abc');
   });
 });

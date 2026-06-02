@@ -1,4 +1,4 @@
-import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
 import { AdminVerifiersComponent } from './admin-verifiers.component';
 import { ApiService, VerifierInfo } from '../core/services/api.service';
@@ -14,24 +14,35 @@ const mockStats = { totalCredits: 10, totalRetirements: 2, activeVerifiers: 1 };
 describe('AdminVerifiersComponent', () => {
   let fixture: ComponentFixture<AdminVerifiersComponent>;
   let component: AdminVerifiersComponent;
-  let apiSpy: jasmine.SpyObj<ApiService>;
-  let authSpy: jasmine.SpyObj<AuthService>;
-  let toastSpy: jasmine.SpyObj<ToastService>;
+  let apiSpy: ReturnType<typeof createApiSpy>;
+  let authSpy: ReturnType<typeof createAuthSpy>;
+  let toastSpy: ReturnType<typeof createToastSpy>;
+
+  function createApiSpy() {
+    return {
+      listVerifiers: vi.fn().mockReturnValue(of([])),
+      getAdminStats: vi.fn().mockReturnValue(of(mockStats)),
+      registerVerifier: vi.fn(),
+      suspendVerifier: vi.fn(),
+      configureVerifier: vi.fn(),
+    };
+  }
+
+  function createAuthSpy() {
+    return {
+      token: () => MOCK_TOKEN,
+      isAuthenticated: () => true,
+    };
+  }
+
+  function createToastSpy() {
+    return { show: vi.fn() };
+  }
 
   beforeEach(async () => {
-    apiSpy = jasmine.createSpyObj('ApiService', [
-      'listVerifiers',
-      'getAdminStats',
-      'registerVerifier',
-      'suspendVerifier',
-      'configureVerifier',
-    ]);
-    apiSpy.listVerifiers.and.returnValue(of([]));
-    apiSpy.getAdminStats.and.returnValue(of(mockStats));
-
-    authSpy = jasmine.createSpyObj('AuthService', [], { token: () => MOCK_TOKEN, isAuthenticated: () => true });
-
-    toastSpy = jasmine.createSpyObj('ToastService', ['show']);
+    apiSpy = createApiSpy();
+    authSpy = createAuthSpy() as any;
+    toastSpy = createToastSpy();
 
     await TestBed.configureTestingModule({
       imports: [AdminVerifiersComponent],
@@ -49,7 +60,6 @@ describe('AdminVerifiersComponent', () => {
   // ── List ──────────────────────────────────────────────────────────────────
 
   it('shows empty state when no verifiers', async () => {
-    apiSpy.listVerifiers.and.returnValue(of([]));
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
@@ -59,7 +69,7 @@ describe('AdminVerifiersComponent', () => {
   });
 
   it('renders verifiers in a table', async () => {
-    apiSpy.listVerifiers.and.returnValue(of([mockVerifier]));
+    apiSpy.listVerifiers.mockReturnValue(of([mockVerifier]));
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
@@ -71,7 +81,7 @@ describe('AdminVerifiersComponent', () => {
   });
 
   it('displays active verifier count from stats', async () => {
-    apiSpy.listVerifiers.and.returnValue(of([mockVerifier]));
+    apiSpy.listVerifiers.mockReturnValue(of([mockVerifier]));
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
@@ -81,7 +91,7 @@ describe('AdminVerifiersComponent', () => {
   });
 
   it('shows error message when list API fails', async () => {
-    apiSpy.listVerifiers.and.returnValue(throwError(() => new Error('Network error')));
+    apiSpy.listVerifiers.mockReturnValue(throwError(() => new Error('Network error')));
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
@@ -106,14 +116,14 @@ describe('AdminVerifiersComponent', () => {
   });
 
   it('calls registerVerifier and reloads on submit', async () => {
-    apiSpy.listVerifiers.and.returnValue(of([mockVerifier]));
-    apiSpy.registerVerifier.and.returnValue(of({ registered: true, address: 'GNEW' }));
+    apiSpy.listVerifiers.mockReturnValue(of([mockVerifier]));
+    apiSpy.registerVerifier.mockReturnValue(of({ registered: true, address: 'GNEW' }));
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
 
     component.openRegister();
-    component.registerAddressValue = 'GNEWADDRESS';
+    (component as any).registerAddressValue = 'GNEWADDRESS';
     fixture.detectChanges();
 
     await component.submitRegister();
@@ -123,12 +133,12 @@ describe('AdminVerifiersComponent', () => {
   });
 
   it('shows toast error when registerVerifier fails', async () => {
-    apiSpy.registerVerifier.and.returnValue(throwError(() => new Error('Already exists')));
+    apiSpy.registerVerifier.mockReturnValue(throwError(() => new Error('Already exists')));
     fixture.detectChanges();
     await fixture.whenStable();
 
     component.openRegister();
-    component.registerAddressValue = 'GBAD';
+    (component as any).registerAddressValue = 'GBAD';
     await component.submitRegister();
 
     expect(toastSpy.show).toHaveBeenCalledWith('Already exists', 'error');
@@ -139,7 +149,7 @@ describe('AdminVerifiersComponent', () => {
     await fixture.whenStable();
 
     component.openRegister();
-    component.registerAddressValue = '   ';
+    (component as any).registerAddressValue = '   ';
     await component.submitRegister();
 
     expect(apiSpy.registerVerifier).not.toHaveBeenCalled();
@@ -151,16 +161,16 @@ describe('AdminVerifiersComponent', () => {
 
     component.openRegister();
     fixture.detectChanges();
-    expect(component['showRegister']()).toBeTrue();
+    expect((component as any)['showRegister']()).toBe(true);
 
     component.closeRegister();
-    expect(component['showRegister']()).toBeFalse();
+    expect((component as any)['showRegister']()).toBe(false);
   });
 
   // ── Configure ─────────────────────────────────────────────────────────────
 
   it('opens configure modal with correct verifier address', async () => {
-    apiSpy.listVerifiers.and.returnValue(of([mockVerifier]));
+    apiSpy.listVerifiers.mockReturnValue(of([mockVerifier]));
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
@@ -192,7 +202,7 @@ describe('AdminVerifiersComponent', () => {
   });
 
   it('calls configureVerifier on submit and shows success toast', async () => {
-    apiSpy.configureVerifier.and.returnValue(of({ configured: true, verifierId: mockVerifier.address }));
+    apiSpy.configureVerifier.mockReturnValue(of({ configured: true, verifierId: mockVerifier.address }));
     component.openConfigure(mockVerifier.address);
     component.toggleMethodology('Verra VCS');
     component.toggleGeography('Africa');
@@ -209,7 +219,7 @@ describe('AdminVerifiersComponent', () => {
   });
 
   it('shows toast error when configureVerifier fails', async () => {
-    apiSpy.configureVerifier.and.returnValue(throwError(() => new Error('Contract error')));
+    apiSpy.configureVerifier.mockReturnValue(throwError(() => new Error('Contract error')));
     component.openConfigure(mockVerifier.address);
 
     await component.submitConfigure();
@@ -228,7 +238,7 @@ describe('AdminVerifiersComponent', () => {
   // ── Suspend ───────────────────────────────────────────────────────────────
 
   it('opens suspend confirmation with correct address', async () => {
-    apiSpy.listVerifiers.and.returnValue(of([mockVerifier]));
+    apiSpy.listVerifiers.mockReturnValue(of([mockVerifier]));
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
@@ -242,8 +252,8 @@ describe('AdminVerifiersComponent', () => {
   });
 
   it('calls suspendVerifier on confirm and reloads', async () => {
-    apiSpy.listVerifiers.and.returnValue(of([]));
-    apiSpy.suspendVerifier.and.returnValue(of({ suspended: true }));
+    apiSpy.listVerifiers.mockReturnValue(of([]));
+    apiSpy.suspendVerifier.mockReturnValue(of({ suspended: true }));
     fixture.detectChanges();
     await fixture.whenStable();
 
@@ -256,7 +266,7 @@ describe('AdminVerifiersComponent', () => {
   });
 
   it('shows toast error when suspendVerifier fails', async () => {
-    apiSpy.suspendVerifier.and.returnValue(throwError(() => new Error('Not found')));
+    apiSpy.suspendVerifier.mockReturnValue(throwError(() => new Error('Not found')));
     component.openSuspend(mockVerifier.address);
 
     await component.confirmSuspend();

@@ -2,7 +2,10 @@ import { IsString, IsNotEmpty, IsNumberString } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class RetireDto {
-  @ApiProperty({ example: 'GABC...XYZ', description: 'Stellar public key of the buyer' })
+  @ApiProperty({
+    example: 'GABC...XYZ',
+    description: 'Stellar public key of the buyer',
+  })
   @IsString()
   @IsNotEmpty()
   buyerPublicKey: string;

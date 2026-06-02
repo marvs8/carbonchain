@@ -1,4 +1,8 @@
-import { isValidMethodology, validateMethodology, VALID_METHODOLOGIES } from './methodologies';
+import {
+  isValidMethodology,
+  validateMethodology,
+  VALID_METHODOLOGIES,
+} from './methodologies';
 
 describe('Methodologies', () => {
   describe('isValidMethodology', () => {

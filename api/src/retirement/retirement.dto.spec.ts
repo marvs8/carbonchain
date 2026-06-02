@@ -17,7 +17,10 @@ describe('RetireDto', () => {
   });
 
   it('rejects empty buyerPublicKey', async () => {
-    const dto = plainToInstance(RetireDto, { ...validPayload, buyerPublicKey: '' });
+    const dto = plainToInstance(RetireDto, {
+      ...validPayload,
+      buyerPublicKey: '',
+    });
     const errors = await validate(dto);
     expect(errors.some((e) => e.property === 'buyerPublicKey')).toBe(true);
   });
@@ -29,7 +32,10 @@ describe('RetireDto', () => {
   });
 
   it('rejects non-numeric tonnes', async () => {
-    const dto = plainToInstance(RetireDto, { ...validPayload, tonnes: 'not-a-number' });
+    const dto = plainToInstance(RetireDto, {
+      ...validPayload,
+      tonnes: 'not-a-number',
+    });
     const errors = await validate(dto);
     expect(errors.some((e) => e.property === 'tonnes')).toBe(true);
   });

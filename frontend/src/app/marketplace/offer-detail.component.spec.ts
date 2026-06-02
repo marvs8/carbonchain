@@ -47,7 +47,7 @@ describe('OfferDetailComponent', () => {
     const closeBtn = fixture.nativeElement.querySelector('[aria-label="Close"]') as HTMLButtonElement;
     closeBtn.click();
 
-    expect(emitted).toBeTrue();
+    expect(emitted).toBe(true);
   });
 
   it('emits buy with offer when buy button clicked', () => {

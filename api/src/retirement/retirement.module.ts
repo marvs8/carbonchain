@@ -6,7 +6,10 @@ import { RetirementController } from './retirement.controller';
 import { CertificateService } from './certificate.service';
 import { StellarModule } from '../stellar/stellar.module';
 import { AuthModule } from '../auth/auth.module';
-import { InMemoryRetirementRepository, RETIREMENT_REPOSITORY } from './retirement.repository';
+import {
+  InMemoryRetirementRepository,
+  RETIREMENT_REPOSITORY,
+} from './retirement.repository';
 
 @Module({
   imports: [ConfigModule, StellarModule, AuthModule],
@@ -23,4 +26,3 @@ import { InMemoryRetirementRepository, RETIREMENT_REPOSITORY } from './retiremen
   exports: [RetirementService],
 })
 export class RetirementModule {}
-

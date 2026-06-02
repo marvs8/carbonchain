@@ -17,19 +17,28 @@ describe('CreateOfferDto', () => {
   });
 
   it('rejects empty sellerPublicKey', async () => {
-    const dto = plainToInstance(CreateOfferDto, { ...validPayload, sellerPublicKey: '' });
+    const dto = plainToInstance(CreateOfferDto, {
+      ...validPayload,
+      sellerPublicKey: '',
+    });
     const errors = await validate(dto);
     expect(errors.some((e) => e.property === 'sellerPublicKey')).toBe(true);
   });
 
   it('rejects non-numeric priceXlm', async () => {
-    const dto = plainToInstance(CreateOfferDto, { ...validPayload, priceXlm: 'free' });
+    const dto = plainToInstance(CreateOfferDto, {
+      ...validPayload,
+      priceXlm: 'free',
+    });
     const errors = await validate(dto);
     expect(errors.some((e) => e.property === 'priceXlm')).toBe(true);
   });
 
   it('rejects non-numeric tonnes', async () => {
-    const dto = plainToInstance(CreateOfferDto, { ...validPayload, tonnes: 'lots' });
+    const dto = plainToInstance(CreateOfferDto, {
+      ...validPayload,
+      tonnes: 'lots',
+    });
     const errors = await validate(dto);
     expect(errors.some((e) => e.property === 'tonnes')).toBe(true);
   });

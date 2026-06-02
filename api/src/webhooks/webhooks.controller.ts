@@ -7,9 +7,7 @@ export class WebhooksController {
   constructor(private webhooksService: WebhooksService) {}
 
   @Post()
-  registerWebhook(
-    @Body() body: { url: string; events: string[] },
-  ): Webhook {
+  registerWebhook(@Body() body: { url: string; events: string[] }): Webhook {
     return this.webhooksService.registerWebhook(body.url, body.events);
   }
 

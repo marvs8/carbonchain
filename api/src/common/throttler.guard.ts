@@ -18,7 +18,8 @@ export interface ThrottleOptions {
 }
 
 /** Decorator to set per-route throttle options. */
-export const Throttle = (options: ThrottleOptions) =>
+export const Throttle =
+  (options: ThrottleOptions) =>
   (target: object, key?: string | symbol, descriptor?: PropertyDescriptor) => {
     if (descriptor) {
       Reflect.defineMetadata(THROTTLE_KEY, options, descriptor.value as object);
@@ -52,9 +53,12 @@ export class ThrottlerGuard implements CanActivate {
     if (!options) return true;
 
     const req = context.switchToHttp().getRequest<Request>();
-    const ip = (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0].trim()
-      ?? req.socket.remoteAddress
-      ?? 'unknown';
+    const ip =
+      (req.headers['x-forwarded-for'] as string | undefined)
+        ?.split(',')[0]
+        .trim() ??
+      req.socket.remoteAddress ??
+      'unknown';
 
     const key = `${ip}:${req.path}`;
     const now = Date.now();
@@ -66,7 +70,10 @@ export class ThrottlerGuard implements CanActivate {
     }
 
     if (record.count >= options.limit) {
-      throw new HttpException('Too Many Requests', HttpStatus.TOO_MANY_REQUESTS);
+      throw new HttpException(
+        'Too Many Requests',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
     }
 
     record.count += 1;

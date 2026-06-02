@@ -17,7 +17,10 @@ export class CreateProjectDto {
   @IsNotEmpty()
   description: string;
 
-  @ApiProperty({ example: 'BR', description: 'ISO 3166-1 alpha-2 country code' })
+  @ApiProperty({
+    example: 'BR',
+    description: 'ISO 3166-1 alpha-2 country code',
+  })
   @IsString()
   @IsNotEmpty()
   location: string;
@@ -27,7 +30,10 @@ export class CreateProjectDto {
   @IsNotEmpty()
   methodology: string;
 
-  @ApiProperty({ example: 'bafybei...', description: 'IPFS CID of project documents' })
+  @ApiProperty({
+    example: 'bafybei...',
+    description: 'IPFS CID of project documents',
+  })
   @IsString()
   @IsNotEmpty()
   documents_cid: string;

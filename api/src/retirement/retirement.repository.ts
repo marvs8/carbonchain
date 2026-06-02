@@ -5,7 +5,11 @@ import { PageResult } from '../credits/credit.repository';
 export interface IRetirementRepository {
   save(record: RetirementEntity): Promise<RetirementEntity>;
   findById(id: string): Promise<RetirementEntity | undefined>;
-  findByBuyer(buyer: string, page: number, limit: number): Promise<PageResult<RetirementEntity>>;
+  findByBuyer(
+    buyer: string,
+    page: number,
+    limit: number,
+  ): Promise<PageResult<RetirementEntity>>;
   findAll(page: number, limit: number): Promise<PageResult<RetirementEntity>>;
 }
 
@@ -28,16 +32,29 @@ export class InMemoryRetirementRepository implements IRetirementRepository {
     return this.store.get(id);
   }
 
-  async findByBuyer(buyer: string, page: number, limit: number): Promise<PageResult<RetirementEntity>> {
-    const all = Array.from(this.store.values()).filter((r) => r.buyer === buyer);
+  async findByBuyer(
+    buyer: string,
+    page: number,
+    limit: number,
+  ): Promise<PageResult<RetirementEntity>> {
+    const all = Array.from(this.store.values()).filter(
+      (r) => r.buyer === buyer,
+    );
     return this.paginate(all, page, limit);
   }
 
-  async findAll(page: number, limit: number): Promise<PageResult<RetirementEntity>> {
+  async findAll(
+    page: number,
+    limit: number,
+  ): Promise<PageResult<RetirementEntity>> {
     return this.paginate(Array.from(this.store.values()), page, limit);
   }
 
-  private paginate(items: RetirementEntity[], page: number, limit: number): PageResult<RetirementEntity> {
+  private paginate(
+    items: RetirementEntity[],
+    page: number,
+    limit: number,
+  ): PageResult<RetirementEntity> {
     const offset = (page - 1) * limit;
     return {
       data: items.slice(offset, offset + limit),

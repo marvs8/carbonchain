@@ -16,7 +16,9 @@ export class AdminController {
   }
 
   @Post('verifiers/register')
-  registerVerifier(@Body() body: { address: string }): Promise<{ registered: boolean; address: string }> {
+  registerVerifier(
+    @Body() body: { address: string },
+  ): Promise<{ registered: boolean; address: string }> {
     return this.adminService.registerVerifier(body.address);
   }
 

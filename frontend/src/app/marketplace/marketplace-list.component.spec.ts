@@ -17,11 +17,14 @@ const mockOffer: Offer = {
 describe('MarketplaceListComponent', () => {
   let fixture: ComponentFixture<MarketplaceListComponent>;
   let component: MarketplaceListComponent;
-  let apiSpy: jasmine.SpyObj<ApiService>;
+  let apiSpy: ReturnType<typeof createApiSpy>;
+
+  function createApiSpy() {
+    return { getListings: vi.fn().mockReturnValue(of([])) };
+  }
 
   beforeEach(async () => {
-    apiSpy = jasmine.createSpyObj('ApiService', ['getListings']);
-    apiSpy.getListings.and.returnValue(of([]));
+    apiSpy = createApiSpy();
 
     await TestBed.configureTestingModule({
       imports: [MarketplaceListComponent],
@@ -33,7 +36,6 @@ describe('MarketplaceListComponent', () => {
   });
 
   it('shows "No active listings" when empty', async () => {
-    apiSpy.getListings.and.returnValue(of([]));
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
@@ -43,7 +45,7 @@ describe('MarketplaceListComponent', () => {
   });
 
   it('renders offers in a table', async () => {
-    apiSpy.getListings.and.returnValue(of([mockOffer]));
+    apiSpy.getListings.mockReturnValue(of([mockOffer]));
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
@@ -53,7 +55,7 @@ describe('MarketplaceListComponent', () => {
   });
 
   it('shows error message on API failure', async () => {
-    apiSpy.getListings.and.returnValue(throwError(() => new Error('Network error')));
+    apiSpy.getListings.mockReturnValue(throwError(() => new Error('Network error')));
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
@@ -63,7 +65,7 @@ describe('MarketplaceListComponent', () => {
   });
 
   it('emits offerSelected when a row is clicked', async () => {
-    apiSpy.getListings.and.returnValue(of([mockOffer]));
+    apiSpy.getListings.mockReturnValue(of([mockOffer]));
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();

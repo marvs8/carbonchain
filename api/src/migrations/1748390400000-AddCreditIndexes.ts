@@ -36,7 +36,9 @@ export class AddCreditIndexes1748390400000 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP INDEX IF EXISTS idx_credits_status_methodology_geography;`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS idx_credits_status_methodology_geography;`,
+    );
     await queryRunner.query(`DROP INDEX IF EXISTS idx_credits_vintage_year;`);
     await queryRunner.query(`DROP INDEX IF EXISTS idx_credits_owner_address;`);
   }

@@ -43,7 +43,7 @@ describe('GlobalErrorHandler', () => {
 
   it('shows a generic message for non-Error values', () => {
     handler.handleError('string error');
-    expect(toastSpy).toHaveBeenCalledWith('string error', 'error');
+    expect(toastSpy).toHaveBeenCalledWith('An unexpected error occurred.', 'error');
   });
 
   it('shows a fallback message for null/undefined errors', () => {

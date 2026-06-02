@@ -33,12 +33,14 @@ const mockRetirement: RetirementRecord = {
 describe('DashboardComponent', () => {
   let fixture: ComponentFixture<DashboardComponent>;
   let component: DashboardComponent;
-  let storeSpy: jasmine.SpyObj<CreditStore>;
-  let walletSpy: jasmine.SpyObj<StellarWalletService>;
-  let apiSpy: jasmine.SpyObj<ApiService>;
+  let storeSpy: ReturnType<typeof createStoreSpy>;
+  let walletSpy: ReturnType<typeof createWalletSpy>;
+  let apiSpy: ReturnType<typeof createApiSpy>;
 
-  beforeEach(async () => {
-    storeSpy = jasmine.createSpyObj('CreditStore', ['loadByProject', 'select'], {
+  function createStoreSpy() {
+    return {
+      loadByProject: vi.fn().mockReturnValue(Promise.resolve()),
+      select: vi.fn(),
       credits: signal([mockCredit]),
       activeCredits: signal([mockCredit]),
       retiredCredits: signal([]),
@@ -47,17 +49,27 @@ describe('DashboardComponent', () => {
       selectedId: signal(null),
       selected: signal(null),
       totalTonnes: signal(BigInt(2000000)),
-    });
-    storeSpy.loadByProject.and.returnValue(Promise.resolve());
+    };
+  }
 
-    walletSpy = jasmine.createSpyObj('StellarWalletService', ['connect', 'isConnected', 'publicKey', 'state', 'error'], {});
-    walletSpy.isConnected.and.returnValue(true);
-    walletSpy.publicKey.and.returnValue('GPUBKEY123');
-    walletSpy.state.and.returnValue('connected');
-    walletSpy.error.and.returnValue(null);
+  function createWalletSpy() {
+    return {
+      connect: vi.fn(),
+      isConnected: vi.fn().mockReturnValue(true),
+      publicKey: vi.fn().mockReturnValue('GPUBKEY123'),
+      state: vi.fn().mockReturnValue('connected'),
+      error: vi.fn().mockReturnValue(null),
+    };
+  }
 
-    apiSpy = jasmine.createSpyObj('ApiService', ['getRetirement']);
-    apiSpy.getRetirement.and.returnValue(of(mockRetirement));
+  function createApiSpy() {
+    return { getRetirement: vi.fn().mockReturnValue(of(mockRetirement)) };
+  }
+
+  beforeEach(async () => {
+    storeSpy = createStoreSpy();
+    walletSpy = createWalletSpy();
+    apiSpy = createApiSpy();
 
     await TestBed.configureTestingModule({
       imports: [DashboardComponent],
@@ -71,14 +83,16 @@ describe('DashboardComponent', () => {
     fixture = TestBed.createComponent(DashboardComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
   });
 
   it('renders portfolio summary stats', () => {
     const text = fixture.nativeElement.textContent as string;
-    expect(text).toContain('Total Credits');
-    expect(text).toContain('Active');
-    expect(text).toContain('Retired');
-    expect(text).toContain('Total Tonnes');
+    expect(text).toContain('dashboard.totalCredits');
+    expect(text).toContain('dashboard.active');
+    expect(text).toContain('dashboard.retired');
+    expect(text).toContain('dashboard.totalTonnes');
   });
 
   it('renders credit table rows', () => {

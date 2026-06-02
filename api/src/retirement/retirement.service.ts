@@ -5,12 +5,8 @@ import { StellarKeypairService } from '../stellar/stellar-keypair.service';
 import { nativeToScVal, scValToNative } from '@stellar/stellar-sdk';
 import { RetirementRecord } from '../shared';
 import { RetirementEntity } from './retirement.entity';
-import type {
-  IRetirementRepository,
-} from './retirement.repository';
-import {
-  RETIREMENT_REPOSITORY,
-} from './retirement.repository';
+import type { IRetirementRepository } from './retirement.repository';
+import { RETIREMENT_REPOSITORY } from './retirement.repository';
 import { PageResult } from '../credits/credit.repository';
 
 export class RetireDto {
@@ -62,7 +58,8 @@ export class RetirementService {
     private readonly stellarService: StellarService,
     private readonly keypairService: StellarKeypairService,
     private readonly configService: ConfigService,
-    @Inject(RETIREMENT_REPOSITORY) private readonly retirementRepo: IRetirementRepository,
+    @Inject(RETIREMENT_REPOSITORY)
+    private readonly retirementRepo: IRetirementRepository,
     @Inject(EVENT_EMITTER) private readonly eventEmitter: IEventEmitter,
   ) {
     this.retirementContractId = this.configService.get<string>(
@@ -180,12 +177,19 @@ export class RetirementService {
     };
   }
 
-  async listRetirements(page = 1, limit = 20): Promise<PageResult<RetirementRecord>> {
+  async listRetirements(
+    page = 1,
+    limit = 20,
+  ): Promise<PageResult<RetirementRecord>> {
     const result = await this.retirementRepo.findAll(page, limit);
     return { ...result, data: result.data.map((e) => this.entityToRecord(e)) };
   }
 
-  async getRetirementsByAccount(account: string, page = 1, limit = 20): Promise<PageResult<RetirementRecord>> {
+  async getRetirementsByAccount(
+    account: string,
+    page = 1,
+    limit = 20,
+  ): Promise<PageResult<RetirementRecord>> {
     const result = await this.retirementRepo.findByBuyer(account, page, limit);
     return { ...result, data: result.data.map((e) => this.entityToRecord(e)) };
   }

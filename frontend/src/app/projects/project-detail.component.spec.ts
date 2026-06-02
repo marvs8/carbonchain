@@ -50,6 +50,7 @@ describe('ProjectDetailComponent', () => {
 
     fixture = TestBed.createComponent(ProjectDetailComponent);
     component = fixture.componentInstance;
+    fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
   });

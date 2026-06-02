@@ -36,7 +36,9 @@ describe('AdminService', () => {
         {
           provide: VerifiersService,
           useValue: {
-            listVerifiers: jest.fn().mockResolvedValue([{ address: 'GVER1' }, { address: 'GVER2' }]),
+            listVerifiers: jest
+              .fn()
+              .mockResolvedValue([{ address: 'GVER1' }, { address: 'GVER2' }]),
             getVerifier: jest.fn().mockResolvedValue({ address: 'GVER1' }),
           },
         },
@@ -44,8 +46,8 @@ describe('AdminService', () => {
     }).compile();
 
     service = module.get(AdminService);
-    creditsService = module.get(CreditsService) as jest.Mocked<CreditsService>;
-    verifiersService = module.get(VerifiersService) as jest.Mocked<VerifiersService>;
+    creditsService = module.get(CreditsService);
+    verifiersService = module.get(VerifiersService);
   });
 
   describe('getStats', () => {
@@ -66,20 +68,28 @@ describe('AdminService', () => {
 
     it('should propagate NotFoundException for unknown verifier', async () => {
       verifiersService.getVerifier.mockRejectedValue(new NotFoundException());
-      await expect(service.suspendVerifier('UNKNOWN')).rejects.toThrow(NotFoundException);
+      await expect(service.suspendVerifier('UNKNOWN')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
   describe('flagCredit', () => {
     it('should return flagged: true for existing credit', async () => {
       const result = await service.flagCredit('abc123');
-      expect(result).toEqual({ flagged: true, creditId: 'abc123', status: CreditStatus.Flagged });
+      expect(result).toEqual({
+        flagged: true,
+        creditId: 'abc123',
+        status: CreditStatus.Flagged,
+      });
       expect(creditsService.getCredit).toHaveBeenCalledWith('abc123');
     });
 
     it('should propagate NotFoundException for unknown credit', async () => {
       creditsService.getCredit.mockRejectedValue(new NotFoundException());
-      await expect(service.flagCredit('UNKNOWN')).rejects.toThrow(NotFoundException);
+      await expect(service.flagCredit('UNKNOWN')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 });

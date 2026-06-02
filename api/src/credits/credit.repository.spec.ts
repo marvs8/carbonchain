@@ -2,7 +2,11 @@ import { InMemoryCreditRepository } from './credit.repository';
 import { CreditEntity } from './credit.entity';
 import { CreditStatus } from '../shared';
 
-function makeCredit(id: string, projectId = 'PROJ-001', status = CreditStatus.Active): CreditEntity {
+function makeCredit(
+  id: string,
+  projectId = 'PROJ-001',
+  status = CreditStatus.Active,
+): CreditEntity {
   const e = new CreditEntity();
   e.id = id;
   e.projectId = projectId;
@@ -63,7 +67,9 @@ describe('InMemoryCreditRepository', () => {
 
     const result = await repo.findByStatus(CreditStatus.Active, 1, 10);
     expect(result.total).toBe(2);
-    expect(result.data.every((c) => c.status === CreditStatus.Active)).toBe(true);
+    expect(result.data.every((c) => c.status === CreditStatus.Active)).toBe(
+      true,
+    );
     expect(result.data.map((c) => c.id).sort()).toEqual(['active1', 'active2']);
   });
 
@@ -74,8 +80,13 @@ describe('InMemoryCreditRepository', () => {
 
     const result = await repo.findByStatus(CreditStatus.Retired, 1, 10);
     expect(result.total).toBe(2);
-    expect(result.data.every((c) => c.status === CreditStatus.Retired)).toBe(true);
-    expect(result.data.map((c) => c.id).sort()).toEqual(['retired1', 'retired2']);
+    expect(result.data.every((c) => c.status === CreditStatus.Retired)).toBe(
+      true,
+    );
+    expect(result.data.map((c) => c.id).sort()).toEqual([
+      'retired1',
+      'retired2',
+    ]);
   });
 
   it('findByStatus returns only Flagged credits', async () => {
@@ -85,8 +96,13 @@ describe('InMemoryCreditRepository', () => {
 
     const result = await repo.findByStatus(CreditStatus.Flagged, 1, 10);
     expect(result.total).toBe(2);
-    expect(result.data.every((c) => c.status === CreditStatus.Flagged)).toBe(true);
-    expect(result.data.map((c) => c.id).sort()).toEqual(['flagged1', 'flagged2']);
+    expect(result.data.every((c) => c.status === CreditStatus.Flagged)).toBe(
+      true,
+    );
+    expect(result.data.map((c) => c.id).sort()).toEqual([
+      'flagged1',
+      'flagged2',
+    ]);
   });
 
   it('findByStatus returns only Pending credits', async () => {

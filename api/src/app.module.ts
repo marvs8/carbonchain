@@ -24,7 +24,9 @@ import { WebhooksModule } from './webhooks/webhooks.module';
         ADMIN_SECRET_KEY: Joi.string().required(),
         DATABASE_URL: Joi.string().required(),
         JWT_SECRET: Joi.string().required(),
-        STELLAR_NETWORK: Joi.string().valid('testnet', 'mainnet').default('testnet'),
+        STELLAR_NETWORK: Joi.string()
+          .valid('testnet', 'mainnet')
+          .default('testnet'),
         STELLAR_HORIZON_URL: Joi.string().uri().required(),
         STELLAR_SOROBAN_RPC: Joi.string().uri().required(),
         PORT: Joi.number().default(3000),

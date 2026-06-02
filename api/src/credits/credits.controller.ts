@@ -1,4 +1,14 @@
-import { Controller, Get, Post, Param, Body, Query, UseGuards, DefaultValuePipe, ParseIntPipe } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Param,
+  Body,
+  Query,
+  UseGuards,
+  DefaultValuePipe,
+  ParseIntPipe,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { CreditsService, IssueCreditDto } from './credits.service';
 import { CreditMetadata } from '../shared';
@@ -34,7 +44,12 @@ export class CreditsController {
     @Query('max_tonnes') maxTonnes?: string,
     @Query('page') page: string = '1',
     @Query('limit') limit: string = '10',
-  ): Promise<{ data: CreditMetadata[]; total: number; page: number; limit: number }> {
+  ): Promise<{
+    data: CreditMetadata[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
     return this.creditsService.listCredits({
       methodology,
       geography,

@@ -15,7 +15,8 @@ const envSchema = Joi.object({
 
 describe('Environment Variable Validation (#46)', () => {
   const validEnv = {
-    ADMIN_SECRET_KEY: 'SXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
+    ADMIN_SECRET_KEY:
+      'SXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
     DATABASE_URL: 'postgresql://postgres:postgres@localhost:5432/carbonchain',
     JWT_SECRET: 'supersecret',
     STELLAR_NETWORK: 'testnet',

@@ -22,19 +22,23 @@ export class CacheService implements OnModuleDestroy {
   async connect(): Promise<void> {
     const url = this.config.get<string>('REDIS_URL');
     if (!url) {
-      this.logger.warn('REDIS_URL not set — caching disabled (in-memory fallback)');
+      this.logger.warn(
+        'REDIS_URL not set — caching disabled (in-memory fallback)',
+      );
       return;
     }
 
     try {
-      this.client = createClient({ url }) as RedisClientType;
+      this.client = createClient({ url });
       this.client.on('error', (err: Error) =>
         this.logger.error(`Redis client error: ${err.message}`),
       );
       await this.client.connect();
       this.logger.log(`Connected to Redis at ${url}`);
     } catch (err) {
-      this.logger.error(`Failed to connect to Redis: ${(err as Error).message}`);
+      this.logger.error(
+        `Failed to connect to Redis: ${(err as Error).message}`,
+      );
       this.client = null;
     }
   }
@@ -54,7 +58,9 @@ export class CacheService implements OnModuleDestroy {
       const raw = await this.client.get(key);
       return raw ? (JSON.parse(raw) as T) : null;
     } catch (err) {
-      this.logger.warn(`Cache GET failed for key "${key}": ${(err as Error).message}`);
+      this.logger.warn(
+        `Cache GET failed for key "${key}": ${(err as Error).message}`,
+      );
       return null;
     }
   }
@@ -68,7 +74,9 @@ export class CacheService implements OnModuleDestroy {
       const ttl = ttlSeconds ?? this.defaultTtlSeconds;
       await this.client.set(key, JSON.stringify(value), { EX: ttl });
     } catch (err) {
-      this.logger.warn(`Cache SET failed for key "${key}": ${(err as Error).message}`);
+      this.logger.warn(
+        `Cache SET failed for key "${key}": ${(err as Error).message}`,
+      );
     }
   }
 
@@ -80,7 +88,9 @@ export class CacheService implements OnModuleDestroy {
     try {
       await this.client.del(keys);
     } catch (err) {
-      this.logger.warn(`Cache DEL failed for keys [${keys.join(', ')}]: ${(err as Error).message}`);
+      this.logger.warn(
+        `Cache DEL failed for keys [${keys.join(', ')}]: ${(err as Error).message}`,
+      );
     }
   }
 
@@ -93,10 +103,14 @@ export class CacheService implements OnModuleDestroy {
       const keys = await this.client.keys(pattern);
       if (keys.length > 0) {
         await this.client.del(keys);
-        this.logger.debug(`Invalidated ${keys.length} keys matching "${pattern}"`);
+        this.logger.debug(
+          `Invalidated ${keys.length} keys matching "${pattern}"`,
+        );
       }
     } catch (err) {
-      this.logger.warn(`Cache DEL pattern "${pattern}" failed: ${(err as Error).message}`);
+      this.logger.warn(
+        `Cache DEL pattern "${pattern}" failed: ${(err as Error).message}`,
+      );
     }
   }
 

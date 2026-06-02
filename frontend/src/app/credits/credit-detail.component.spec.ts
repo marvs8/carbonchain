@@ -46,6 +46,7 @@ describe('CreditDetailComponent', () => {
 
     fixture = TestBed.createComponent(CreditDetailComponent);
     component = fixture.componentInstance;
+    fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
   });

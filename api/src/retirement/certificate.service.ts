@@ -2,7 +2,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 // pdfkit ships as a CommonJS module; use require to avoid ESM issues.
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+
 const PDFDocument = require('pdfkit') as typeof import('pdfkit');
 
 export interface CertificateData {
@@ -23,7 +23,10 @@ export class CertificateService {
 
   constructor(private readonly configService: ConfigService) {
     this.pinataApiKey = this.configService.get<string>('IPFS_API_KEY', '');
-    this.pinataSecretKey = this.configService.get<string>('IPFS_SECRET_KEY', '');
+    this.pinataSecretKey = this.configService.get<string>(
+      'IPFS_SECRET_KEY',
+      '',
+    );
     this.pinataApiUrl = this.configService.get<string>(
       'IPFS_API_URL',
       'https://api.pinata.cloud',
@@ -74,7 +77,9 @@ export class CertificateService {
         .fontSize(12)
         .font('Helvetica')
         .fillColor('#555555')
-        .text('Issued by CarbonChain on the Stellar Network', { align: 'center' });
+        .text('Issued by CarbonChain on the Stellar Network', {
+          align: 'center',
+        });
 
       doc.moveDown(1.5);
       doc.moveTo(60, doc.y).lineTo(535, doc.y).strokeColor('#cccccc').stroke();

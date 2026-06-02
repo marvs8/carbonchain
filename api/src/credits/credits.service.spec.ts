@@ -18,7 +18,7 @@ describe('CreditsService.listCredits status filtering', () => {
     // minimal stubs for unused dependencies
     const stellar: any = {};
     const keypair: any = {};
-    svc = new CreditsService(stellar, mockConfig, keypair, repo as any, cache as any);
+    svc = new CreditsService(stellar, mockConfig, keypair, repo, cache);
 
     const now = Math.floor(Date.now() / 1000);
 
@@ -83,19 +83,31 @@ describe('CreditsService.listCredits status filtering', () => {
   });
 
   it('returns Retired when status=Retired', async () => {
-    const res = await svc.listCredits({ page: 1, limit: 10, status: CreditStatus.Retired });
+    const res = await svc.listCredits({
+      page: 1,
+      limit: 10,
+      status: CreditStatus.Retired,
+    });
     expect(res.data.map((d) => d.id)).toEqual(['C-RETIRED']);
     expect(res.total).toBe(1);
   });
 
   it('returns Flagged when status=Flagged', async () => {
-    const res = await svc.listCredits({ page: 1, limit: 10, status: CreditStatus.Flagged });
+    const res = await svc.listCredits({
+      page: 1,
+      limit: 10,
+      status: CreditStatus.Flagged,
+    });
     expect(res.data.map((d) => d.id)).toEqual(['C-FLAGGED']);
     expect(res.total).toBe(1);
   });
 
   it('returns Pending when status=Pending', async () => {
-    const res = await svc.listCredits({ page: 1, limit: 10, status: CreditStatus.Pending });
+    const res = await svc.listCredits({
+      page: 1,
+      limit: 10,
+      status: CreditStatus.Pending,
+    });
     expect(res.data.map((d) => d.id)).toEqual(['C-PENDING']);
     expect(res.total).toBe(1);
   });

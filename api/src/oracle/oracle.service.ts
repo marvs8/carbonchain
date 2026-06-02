@@ -1,9 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment */
-import {
-  Injectable,
-  Logger,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { StellarService } from '../stellar/stellar.service';
@@ -28,8 +23,14 @@ export class OracleService {
     private readonly keypairService: StellarKeypairService,
     private readonly configService: ConfigService,
   ) {
-    this.contractId = this.configService.get<string>('MRV_ORACLE_CONTRACT_ID', '');
-    this.webhookSecret = this.configService.get<string>('ORACLE_WEBHOOK_SECRET', 'changeme');
+    this.contractId = this.configService.get<string>(
+      'MRV_ORACLE_CONTRACT_ID',
+      '',
+    );
+    this.webhookSecret = this.configService.get<string>(
+      'ORACLE_WEBHOOK_SECRET',
+      'changeme',
+    );
   }
 
   /**
@@ -54,13 +55,15 @@ export class OracleService {
   async ingestMrvData(dto: MrvWebhookDto): Promise<{ anomaly: boolean }> {
     this.validateSignature(dto);
 
-    this.logger.log(`MRV update for project ${dto.projectId} from oracle ${dto.oraclePublicKey}`);
+    this.logger.log(
+      `MRV update for project ${dto.projectId} from oracle ${dto.oraclePublicKey}`,
+    );
 
     const args = [
       nativeToScVal(dto.oraclePublicKey, { type: 'address' }),
       nativeToScVal(dto.projectId, { type: 'string' }),
       nativeToScVal(BigInt(dto.tonnesSequestered), { type: 'i128' }),
-          nativeToScVal(BigInt(Math.floor(Date.now() / 1000)), { type: 'u64' }),
+      nativeToScVal(BigInt(Math.floor(Date.now() / 1000)), { type: 'u64' }),
     ];
 
     const signer = this.keypairService.getAdminKeypair();

@@ -12,13 +12,21 @@ export interface PageResult<T> {
 export interface ICreditRepository {
   save(credit: CreditEntity): Promise<CreditEntity>;
   findById(id: string): Promise<CreditEntity | undefined>;
-  findByProject(projectId: string, page: number, limit: number): Promise<PageResult<CreditEntity>>;
+  findByProject(
+    projectId: string,
+    page: number,
+    limit: number,
+  ): Promise<PageResult<CreditEntity>>;
   findAll(page: number, limit: number): Promise<PageResult<CreditEntity>>;
   /**
    * Return a paginated list of credits whose status matches `status`.
    * When `status` is omitted the caller is responsible for applying a default.
    */
-  findByStatus(status: CreditStatus, page: number, limit: number): Promise<PageResult<CreditEntity>>;
+  findByStatus(
+    status: CreditStatus,
+    page: number,
+    limit: number,
+  ): Promise<PageResult<CreditEntity>>;
 }
 
 export const CREDIT_REPOSITORY = 'CREDIT_REPOSITORY';
@@ -40,21 +48,40 @@ export class InMemoryCreditRepository implements ICreditRepository {
     return this.store.get(id);
   }
 
-  async findByProject(projectId: string, page: number, limit: number): Promise<PageResult<CreditEntity>> {
-    const all = Array.from(this.store.values()).filter((c) => c.projectId === projectId);
+  async findByProject(
+    projectId: string,
+    page: number,
+    limit: number,
+  ): Promise<PageResult<CreditEntity>> {
+    const all = Array.from(this.store.values()).filter(
+      (c) => c.projectId === projectId,
+    );
     return this.paginate(all, page, limit);
   }
 
-  async findAll(page: number, limit: number): Promise<PageResult<CreditEntity>> {
+  async findAll(
+    page: number,
+    limit: number,
+  ): Promise<PageResult<CreditEntity>> {
     return this.paginate(Array.from(this.store.values()), page, limit);
   }
 
-  async findByStatus(status: CreditStatus, page: number, limit: number): Promise<PageResult<CreditEntity>> {
-    const all = Array.from(this.store.values()).filter((c) => c.status === status);
+  async findByStatus(
+    status: CreditStatus,
+    page: number,
+    limit: number,
+  ): Promise<PageResult<CreditEntity>> {
+    const all = Array.from(this.store.values()).filter(
+      (c) => c.status === status,
+    );
     return this.paginate(all, page, limit);
   }
 
-  private paginate(items: CreditEntity[], page: number, limit: number): PageResult<CreditEntity> {
+  private paginate(
+    items: CreditEntity[],
+    page: number,
+    limit: number,
+  ): PageResult<CreditEntity> {
     const offset = (page - 1) * limit;
     return {
       data: items.slice(offset, offset + limit),

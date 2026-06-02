@@ -1,10 +1,20 @@
-import { IsString, IsNotEmpty, IsInt, Min, Max, IsNumberString } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsInt,
+  Min,
+  Max,
+  IsNumberString,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { IsValidMethodology } from '../validators/methodology.validator';
 import { VALID_METHODOLOGIES } from '../methodologies';
 
 export class IssueCreditDto {
-  @ApiProperty({ example: 'GABC...XYZ', description: 'Stellar public key of the issuer' })
+  @ApiProperty({
+    example: 'GABC...XYZ',
+    description: 'Stellar public key of the issuer',
+  })
   @IsString()
   @IsNotEmpty()
   issuerPublicKey: string;
@@ -29,7 +39,10 @@ export class IssueCreditDto {
   @IsValidMethodology({ message: 'Invalid methodology' })
   methodology: string;
 
-  @ApiProperty({ example: 'NG', description: 'ISO 3166-1 alpha-2 country code' })
+  @ApiProperty({
+    example: 'NG',
+    description: 'ISO 3166-1 alpha-2 country code',
+  })
   @IsString()
   @IsNotEmpty()
   geography: string;
@@ -39,7 +52,10 @@ export class IssueCreditDto {
   @IsNotEmpty()
   tonnes: string;
 
-  @ApiProperty({ example: 'bafybei...', description: 'IPFS CID of project documentation' })
+  @ApiProperty({
+    example: 'bafybei...',
+    description: 'IPFS CID of project documentation',
+  })
   @IsString()
   @IsNotEmpty()
   ipfsHash: string;

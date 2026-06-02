@@ -6,8 +6,17 @@
  *   has been successfully persisted to the repository.  If the repository write
  *   fails the event must NOT be emitted.
  */
-import { RetirementService, RetireDto, CreditRetiredEvent, EVENT_EMITTER, IEventEmitter } from './retirement.service';
-import { InMemoryRetirementRepository, RETIREMENT_REPOSITORY } from './retirement.repository';
+import {
+  RetirementService,
+  RetireDto,
+  CreditRetiredEvent,
+  EVENT_EMITTER,
+  IEventEmitter,
+} from './retirement.service';
+import {
+  InMemoryRetirementRepository,
+  RETIREMENT_REPOSITORY,
+} from './retirement.repository';
 import { StellarService } from '../stellar/stellar.service';
 import { StellarKeypairService } from '../stellar/stellar-keypair.service';
 import { ConfigService } from '@nestjs/config';
@@ -25,7 +34,8 @@ const mockKeypairService = {
   getAdminKeypair: jest.fn().mockReturnValue({}),
 };
 
-const VALID_CONTRACT_ID = 'GCRZUKNU2J5GLSYTZR4OLO7OBJJVHSMVBGG7IVUZU5FXMFHUDCLDGQJX';
+const VALID_CONTRACT_ID =
+  'GCRZUKNU2J5GLSYTZR4OLO7OBJJVHSMVBGG7IVUZU5FXMFHUDCLDGQJX';
 
 const mockConfigService = {
   get: jest.fn((key: string, def?: string) => {
@@ -96,11 +106,13 @@ describe('RetirementService — event ordering (issue #162)', () => {
     });
 
     // Replace emitter to record when the event fires
-    eventEmitter.emit = jest.fn().mockImplementation((event: string, payload: unknown) => {
-      emittedEvents.push({ event, payload });
-      order.push('emit');
-      return true;
-    });
+    eventEmitter.emit = jest
+      .fn()
+      .mockImplementation((event: string, payload: unknown) => {
+        emittedEvents.push({ event, payload });
+        order.push('emit');
+        return true;
+      });
 
     await service.retire(makeDto());
 
@@ -129,19 +141,28 @@ describe('RetirementService — event ordering (issue #162)', () => {
 
     await expect(service.retire(makeDto())).rejects.toThrow('DB write failed');
 
-    const creditRetiredEvents = emittedEvents.filter((e) => e.event === 'CreditRetired');
+    const creditRetiredEvents = emittedEvents.filter(
+      (e) => e.event === 'CreditRetired',
+    );
     expect(creditRetiredEvents).toHaveLength(0);
   });
 
   it('emits exactly one CreditRetired event per retire call', async () => {
     await service.retire(makeDto());
 
-    const creditRetiredEvents = emittedEvents.filter((e) => e.event === 'CreditRetired');
+    const creditRetiredEvents = emittedEvents.filter(
+      (e) => e.event === 'CreditRetired',
+    );
     expect(creditRetiredEvents).toHaveLength(1);
   });
 
   it('CreditRetired event payload contains the correct retirement data', async () => {
-    const dto = makeDto({ creditId: 'deadbeef', tonnes: '500000', buyerPublicKey: 'GCRZUKNU2J5GLSYTZR4OLO7OBJJVHSMVBGG7IVUZU5FXMFHUDCLDGQJX' });
+    const dto = makeDto({
+      creditId: 'deadbeef',
+      tonnes: '500000',
+      buyerPublicKey:
+        'GCRZUKNU2J5GLSYTZR4OLO7OBJJVHSMVBGG7IVUZU5FXMFHUDCLDGQJX',
+    });
 
     await service.retire(dto);
 
@@ -150,7 +171,9 @@ describe('RetirementService — event ordering (issue #162)', () => {
     const payload = event!.payload as CreditRetiredEvent;
     expect(payload.creditId).toBe('deadbeef');
     expect(payload.tonnesRetired).toBe('500000');
-    expect(payload.buyer).toBe('GCRZUKNU2J5GLSYTZR4OLO7OBJJVHSMVBGG7IVUZU5FXMFHUDCLDGQJX');
+    expect(payload.buyer).toBe(
+      'GCRZUKNU2J5GLSYTZR4OLO7OBJJVHSMVBGG7IVUZU5FXMFHUDCLDGQJX',
+    );
     expect(typeof payload.retiredAt).toBe('number');
     expect(payload.retiredAt).toBeGreaterThan(0);
   });
@@ -161,7 +184,9 @@ describe('RetirementService — event ordering (issue #162)', () => {
     const record = await repo.findById(retirementId);
     expect(record).toBeDefined();
     expect(record!.creditId).toBe('aabbccdd');
-    expect(record!.buyer).toBe('GCRZUKNU2J5GLSYTZR4OLO7OBJJVHSMVBGG7IVUZU5FXMFHUDCLDGQJX');
+    expect(record!.buyer).toBe(
+      'GCRZUKNU2J5GLSYTZR4OLO7OBJJVHSMVBGG7IVUZU5FXMFHUDCLDGQJX',
+    );
     expect(record!.tonnesRetired).toBe('1000000');
   });
 });

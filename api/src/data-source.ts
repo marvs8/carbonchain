@@ -14,7 +14,9 @@ dotenv.config();
  */
 export const AppDataSource = new DataSource({
   type: 'postgres',
-  url: process.env['DATABASE_URL'] ?? 'postgresql://postgres:postgres@localhost:5432/carbonchain',
+  url:
+    process.env['DATABASE_URL'] ??
+    'postgresql://postgres:postgres@localhost:5432/carbonchain',
   synchronize: false,
   logging: process.env['NODE_ENV'] !== 'production',
   entities: [__dirname + '/**/*.entity{.ts,.js}'],

@@ -20,13 +20,19 @@ async function bootstrap() {
 
   // #43 — global input validation
   app.useGlobalPipes(
-    new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    }),
   );
 
   // #38 — Swagger/OpenAPI docs at /api/docs
   const config = new DocumentBuilder()
     .setTitle('CarbonChain API')
-    .setDescription('Transparent carbon credit registry and marketplace on Stellar')
+    .setDescription(
+      'Transparent carbon credit registry and marketplace on Stellar',
+    )
     .setVersion('1.0')
     .addBearerAuth()
     .build();

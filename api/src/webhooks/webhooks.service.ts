@@ -40,7 +40,9 @@ export class WebhooksService {
       failureCount: 0,
     };
     this.webhooks.set(id, webhook);
-    this.logger.log(`Registered webhook ${id} for events: ${events.join(', ')}`);
+    this.logger.log(
+      `Registered webhook ${id} for events: ${events.join(', ')}`,
+    );
     return webhook;
   }
 
@@ -149,12 +151,9 @@ export class WebhooksService {
     for (const delivery of pendingDeliveries) {
       const webhook = this.webhooks.get(delivery.webhookId);
       if (webhook) {
-        await this.attemptDelivery(
-          webhook,
-          delivery,
-          'retry',
-          { deliveryId: delivery.id },
-        );
+        await this.attemptDelivery(webhook, delivery, 'retry', {
+          deliveryId: delivery.id,
+        });
       }
     }
   }

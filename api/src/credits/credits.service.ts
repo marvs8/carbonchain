@@ -1,18 +1,19 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment */
-import { Injectable, Inject, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  Logger,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { StellarService } from '../stellar/stellar.service';
 import { StellarKeypairService } from '../stellar/stellar-keypair.service';
 import { scValToNative, nativeToScVal } from '@stellar/stellar-sdk';
 import { CreditMetadata, CreditStatus } from '../shared';
 import { CreditEntity } from './credit.entity';
-import type {
-  ICreditRepository,
-  PageResult,
-} from './credit.repository';
-import {
-  CREDIT_REPOSITORY,
-} from './credit.repository';
+import type { ICreditRepository, PageResult } from './credit.repository';
+import { CREDIT_REPOSITORY } from './credit.repository';
 import { CacheService } from '../common/cache.service';
 
 // Cache key helpers
@@ -170,9 +171,12 @@ export class CreditsService {
     return results;
   }
 
-  async listCredits(
-    filter: ListCreditsFilter,
-  ): Promise<{ data: CreditMetadata[]; total: number; page: number; limit: number }> {
+  async listCredits(filter: ListCreditsFilter): Promise<{
+    data: CreditMetadata[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
     // Default to Active-only when no status is requested, so Retired and Flagged
     // credits are never included unless the caller explicitly opts in.
     const effectiveStatus: string = filter.status ?? CreditStatus.Active;
@@ -202,7 +206,9 @@ export class CreditsService {
       const repoResult = await this.creditRepo.findAll(1, 1000000);
       allCredits = repoResult.data.map((e) => this.entityToMetadata(e));
     } catch (err) {
-      this.logger.warn(`Failed to fetch credits from repo: ${(err as Error).message}`);
+      this.logger.warn(
+        `Failed to fetch credits from repo: ${(err as Error).message}`,
+      );
       allCredits = [];
     }
 
@@ -215,7 +221,8 @@ export class CreditsService {
 
     if (filter.methodology) {
       filtered = filtered.filter(
-        (c) => c.methodology.toLowerCase() === filter.methodology!.toLowerCase(),
+        (c) =>
+          c.methodology.toLowerCase() === filter.methodology!.toLowerCase(),
       );
     }
 

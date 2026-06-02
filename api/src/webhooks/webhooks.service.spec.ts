@@ -32,8 +32,12 @@ describe('WebhooksService', () => {
 
   describe('getWebhooks', () => {
     it('should return all registered webhooks', () => {
-      service.registerWebhook('https://example.com/webhook1', ['credit_submitted']);
-      service.registerWebhook('https://example.com/webhook2', ['credit_minted']);
+      service.registerWebhook('https://example.com/webhook1', [
+        'credit_submitted',
+      ]);
+      service.registerWebhook('https://example.com/webhook2', [
+        'credit_minted',
+      ]);
 
       const webhooks = service.getWebhooks();
       expect(webhooks.length).toBe(2);
