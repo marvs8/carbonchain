@@ -98,7 +98,8 @@ IS_VERIFIER=$(invoke "$CREDIT_REGISTRY_ID" is_verifier --address "$VERIFIER_ADDR
 assert_eq "credit_registry.is_verifier()" "$IS_VERIFIER" "true"
 
 log "Registering a test issuer"
-ISSUER_KEY=$(stellar keys generate smoke-issuer --no-fund 2>/dev/null || true)
+stellar keys rm smoke-issuer 2>/dev/null || true
+stellar keys generate smoke-issuer --no-fund || stellar keys generate smoke-issuer
 ISSUER_ADDRESS=$(stellar keys address smoke-issuer 2>/dev/null)
 [[ -n "$ISSUER_ADDRESS" ]] || fail "Could not generate smoke-issuer keypair"
 
