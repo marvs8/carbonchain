@@ -42,20 +42,19 @@ stellar keys fund "$ADMIN_ADDRESS" --network testnet || true
 # ── 2. Build contracts ────────────────────────────────────────────────────────
 
 log "Building Soroban contracts..."
-# Build credit_registry first with LTO (standalone, no "library" feature → no symbol conflicts)
+# Build dependent contracts first — this compiles credit_registry as a
+# dependency with the "library" feature active, which suppresses its
+# contract exports so they don't clash with the dependent's own exports.
 (cd "$SCRIPT_DIR/../contracts" && \
-  cargo build -p carbonchain-credit-registry --target wasm32v1-none --release --quiet)
-# Build dependent contracts without LTO to avoid duplicate-symbol conflicts
-# when their credit_registry rlib dependency (with "library" feature) is linked in.
-(cd "$SCRIPT_DIR/../contracts" && \
-  CARGO_PROFILE_RELEASE_LTO=false \
   cargo build -p carbonchain-retirement --target wasm32v1-none --release --quiet)
 (cd "$SCRIPT_DIR/../contracts" && \
-  CARGO_PROFILE_RELEASE_LTO=false \
   cargo build -p carbonchain-marketplace --target wasm32v1-none --release --quiet)
 (cd "$SCRIPT_DIR/../contracts" && \
-  CARGO_PROFILE_RELEASE_LTO=false \
   cargo build -p carbonchain-mrv-oracle --target wasm32v1-none --release --quiet)
+# Build credit_registry standalone last (without "library" feature) so
+# its separate WASM binary has all contract exports.
+(cd "$SCRIPT_DIR/../contracts" && \
+  cargo build -p carbonchain-credit-registry --target wasm32v1-none --release --quiet)
 
 WASM_DIR="$SCRIPT_DIR/../contracts/target/wasm32v1-none/release"
 
