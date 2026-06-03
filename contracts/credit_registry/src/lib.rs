@@ -23,6 +23,8 @@ pub mod types;
 pub mod errors;
 pub mod storage;
 pub mod events;
+#[cfg(feature = "testutils")]
+pub mod test_helpers;
 
 use crate::errors::CarbonChainError;
 use crate::storage::{
@@ -54,10 +56,10 @@ use crate::events::{
 };
 
 
-#[contract]
+#[cfg_attr(not(feature = "library"), contract)]
 pub struct CreditRegistry;
 
-#[contractimpl]
+#[cfg_attr(not(feature = "library"), contractimpl)]
 impl CreditRegistry {
     // ── Admin ────────────────────────────────────────────────────────────────
 

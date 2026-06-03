@@ -28,10 +28,15 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
       - name: Build Contracts
-        run: cd contracts && CARGO_TARGET_WASM32V1_NONE_RUSTFLAGS="-C link-args=--allow-multiple-definition" cargo build --target wasm32v1-none
-      # #47 — run tests for all four contracts (credit_registry, retirement, marketplace, mrv_oracle)
-      - name: Run Contract Tests
-        run: cd contracts && cargo test --workspace
+        run: cd contracts && cargo build --target wasm32v1-none
+      # #47 — run credit_registry tests standalone (avoids workspace feature unification)
+      - name: Run Credit Registry Tests
+        run: cd contracts/credit_registry && cargo test
+      - name: Run Remaining Contract Tests
+        run: |
+          cd contracts && cargo test -p carbonchain-retirement \
+                                 -p carbonchain-marketplace \
+                                 -p carbonchain-mrv-oracle
 
   api:
     name: Backend API (NestJS)

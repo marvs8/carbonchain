@@ -374,31 +374,32 @@ mod tests {
 
     fn setup() -> (Env, MrvOracleClient<'static>, Address, Address, Address) {
         let env = Env::default();
+        env.budget().reset_unlimited();
         env.mock_all_auths();
         env.ledger().set_timestamp(1735689600);
-        
-        let registry_id = env.register(carbonchain_credit_registry::CreditRegistry, ());
-        let registry_client = carbonchain_credit_registry::CreditRegistryClient::new(&env, &registry_id);
+
+        let registry = carbonchain_credit_registry::test_helpers::RegistryHelper::deploy(&env);
+        let registry_id = registry.id.clone();
         let admin = Address::generate(&env);
         let verifier = Address::generate(&env);
         let retirement = Address::generate(&env);
-        registry_client.initialize(&admin, &retirement, &1);
-        let nonce = registry_client.get_nonce(&admin);
-        registry_client.register_verifier(&admin, &verifier, &nonce);
-        
+        registry.initialize(&admin, &retirement, 1);
+        let nonce = registry.get_nonce(&admin);
+        registry.register_verifier(&admin, &verifier, nonce);
+
         let issuer = Address::generate(&env);
-        let anonce = registry_client.get_nonce(&admin);
-        registry_client.register_issuer(&admin, &issuer, &anonce);
-        let anonce2 = registry_client.get_nonce(&admin);
-        registry_client.register_methodology(
+        let anonce = registry.get_nonce(&admin);
+        registry.register_issuer(&admin, &issuer, anonce);
+        let anonce2 = registry.get_nonce(&admin);
+        registry.register_methodology(
             &admin,
             &String::from_str(&env, "VCS"),
             &String::from_str(&env, "Verified Carbon Standard"),
-            &anonce2,
+            anonce2,
         );
         for proj in ["PROJ-001", "PROJ-AGG", "PROJ-EMPTY", "PROJ-CAP"] {
-            let anonce_proj = registry_client.get_nonce(&admin);
-            registry_client.register_project(
+            let anonce_proj = registry.get_nonce(&admin);
+            registry.register_project(
                 &admin,
                 &String::from_str(&env, proj),
                 &String::from_str(&env, "Test Project"),
@@ -407,31 +408,31 @@ mod tests {
             );
         }
 
-        let inonce = registry_client.get_nonce(&issuer);
-        registry_client.submit_credit(
+        let inonce = registry.get_nonce(&issuer);
+        registry.submit_credit(
             &issuer,
             &String::from_str(&env, "PROJ-001"),
-            &2024,
+            2024,
             &String::from_str(&env, "VCS"),
             &String::from_str(&env, "NG"),
-            &1_000_000,
+            1_000_000,
             &String::from_str(&env, "bafybei123"),
-            &inonce,
+            inonce,
         );
         for proj in ["PROJ-AGG", "PROJ-EMPTY", "PROJ-CAP"] {
-            let inonce2 = registry_client.get_nonce(&issuer);
-            registry_client.submit_credit(
+            let inonce2 = registry.get_nonce(&issuer);
+            registry.submit_credit(
                 &issuer,
                 &String::from_str(&env, proj),
-                &2024,
+                2024,
                 &String::from_str(&env, "VCS"),
                 &String::from_str(&env, "NG"),
-                &1_000_000,
+                1_000_000,
                 &String::from_str(&env, "bafybei456"),
-                &inonce2,
+                inonce2,
             );
         }
-        
+
         let id = env.register(MrvOracle, ());
         let client = MrvOracleClient::new(&env, &id);
         let oracle = Address::generate(&env);
