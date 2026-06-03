@@ -27,6 +27,17 @@ invoke() {
     -- "$@"
 }
 
+invoke_as() {
+  # invoke_as <source_alias> <contract_id> <function> [args...]
+  local source="$1"; shift
+  local contract_id="$1"; shift
+  stellar contract invoke \
+    --id "$contract_id" \
+    --source "$source" \
+    --network testnet \
+    -- "$@"
+}
+
 assert_eq() {
   local label="$1" got="$2" want="$3"
   if [[ "$got" == "$want" ]]; then
@@ -120,7 +131,7 @@ invoke "$CREDIT_REGISTRY_ID" register_methodology \
 pass "credit_registry.register_methodology() succeeded (or already registered)"
 
 log "Registering test project"
-invoke "$CREDIT_REGISTRY_ID" register_project \
+invoke_as smoke-issuer "$CREDIT_REGISTRY_ID" register_project \
   --owner "$ISSUER_ADDRESS" \
   --project-id '"SMOKE-PROJ-001"' \
   --name '"Smoke Test Project"' \
@@ -130,7 +141,7 @@ pass "credit_registry.register_project() succeeded (or already registered)"
 
 log "Submitting a test credit"
 ISSUER_NONCE=$(invoke "$CREDIT_REGISTRY_ID" get_nonce --address "$ISSUER_ADDRESS")
-CREDIT_ID=$(invoke "$CREDIT_REGISTRY_ID" submit_credit \
+CREDIT_ID=$(invoke_as smoke-issuer "$CREDIT_REGISTRY_ID" submit_credit \
   --issuer "$ISSUER_ADDRESS" \
   --project-id '"SMOKE-PROJ-001"' \
   --vintage-year 2024 \
@@ -151,7 +162,7 @@ pass "credit_registry.get_credit() status = $CREDIT_STATUS"
 
 log "Approving and minting the credit"
 VERIFIER_NONCE=$(invoke "$CREDIT_REGISTRY_ID" get_nonce --address "$VERIFIER_ADDRESS")
-invoke "$CREDIT_REGISTRY_ID" approve_and_mint \
+invoke_as smoke-verifier "$CREDIT_REGISTRY_ID" approve_and_mint \
   --verifier "$VERIFIER_ADDRESS" \
   --credit-id "$CREDIT_ID" \
   --nonce "$VERIFIER_NONCE" > /dev/null
