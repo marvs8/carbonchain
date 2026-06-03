@@ -1454,13 +1454,27 @@
             "topics": [
               {
                 "symbol": "offer_new"
-              },
-              {
-                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARQG5"
               }
             ],
             "data": {
-              "u64": "0"
+              "map": [
+                {
+                  "key": {
+                    "symbol": "offer_id"
+                  },
+                  "val": {
+                    "u64": "0"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "seller"
+                  },
+                  "val": {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARQG5"
+                  }
+                }
+              ]
             }
           }
         }

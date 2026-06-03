@@ -1,7 +1,7 @@
 #![no_std]
 use soroban_sdk::{
-    contract, contractimpl, contracttype, contracterror, symbol_short,
-    Env, Address, String, Vec, Symbol, IntoVal,
+    contract, contractimpl, contracttype, contracterror, contractevent,
+    Env, Address, String, Vec, IntoVal,
 };
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -53,6 +53,45 @@ pub enum OracleError {
     NoPendingAdmin     = 128,
 }
 
+#[contractevent]
+#[derive(Clone)]
+pub struct MrvInit {
+    pub admin: Address,
+}
+
+#[contractevent]
+#[derive(Clone)]
+pub struct Paused {
+    pub admin: Address,
+}
+
+#[contractevent]
+#[derive(Clone)]
+pub struct Unpaused {
+    pub admin: Address,
+}
+
+#[contractevent]
+#[derive(Clone)]
+pub struct OrcDup {
+    pub oracle: Address,
+}
+
+#[contractevent]
+#[derive(Clone)]
+pub struct OrcNew {
+    pub oracle: Address,
+}
+
+#[contractevent]
+#[derive(Clone)]
+pub struct MrvUpd {
+    pub oracle: Address,
+    pub project_id: String,
+    pub tonnes: i128,
+    pub anomaly: bool,
+}
+
 // Maximum MRV history entries retained per project (ring-buffer eviction).
 const MAX_HISTORY: u32 = 100;
 
@@ -74,7 +113,7 @@ impl MrvOracle {
     /// - [`OracleError::AlreadyInitialized`] — contract has already been initialised.
     pub fn initialize(env: Env, admin: Address) -> Result<(), OracleError> {
         env.storage().instance().set(&DataKey::Admin, &admin);
-        env.events().publish((symbol_short!("mrv_init"),), admin);
+        MrvInit { admin }.publish(&env);
         Ok(())
     }
 
@@ -88,7 +127,7 @@ impl MrvOracle {
     pub fn pause(env: Env, admin: Address) -> Result<(), OracleError> {
         Self::require_admin(&env, &admin)?;
         env.storage().instance().set(&DataKey::Paused, &true);
-        env.events().publish((symbol_short!("paused"),), admin);
+        Paused { admin }.publish(&env);
         Ok(())
     }
 
@@ -100,7 +139,7 @@ impl MrvOracle {
     pub fn unpause(env: Env, admin: Address) -> Result<(), OracleError> {
         Self::require_admin(&env, &admin)?;
         env.storage().instance().set(&DataKey::Paused, &false);
-        env.events().publish((symbol_short!("unpaused"),), admin);
+        Unpaused { admin }.publish(&env);
         Ok(())
     }
 
@@ -128,12 +167,12 @@ impl MrvOracle {
             .unwrap_or_else(|| Vec::new(&env));
         if set.contains(&oracle) {
             // Already registered — emit a distinct event so callers know.
-            env.events().publish((symbol_short!("orc_dup"),), oracle);
+            OrcDup { oracle: oracle.clone() }.publish(&env);
             return Ok(false);
         }
         set.push_back(oracle.clone());
         env.storage().instance().set(&DataKey::OracleSet, &set);
-        env.events().publish((symbol_short!("orc_new"),), oracle);
+        OrcNew { oracle: oracle.clone() }.publish(&env);
         Ok(true)
     }
 
@@ -208,10 +247,7 @@ impl MrvOracle {
         env.storage().persistent().set(&hist_key, &history);
         env.storage().persistent().extend_ttl(&hist_key, TTL_THRESHOLD, MIN_TTL);
 
-        env.events().publish(
-            (symbol_short!("mrv_upd"), oracle),
-            (project_id, tonnes, anomaly),
-        );
+        MrvUpd { oracle, project_id, tonnes, anomaly }.publish(&env);
 
         Ok(anomaly)
     }

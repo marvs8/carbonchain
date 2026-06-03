@@ -2916,18 +2916,33 @@
             "topics": [
               {
                 "symbol": "retire"
-              },
-              {
-                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
               }
             ],
             "data": {
-              "vec": [
+              "map": [
                 {
-                  "bytes": "68ddc8506e3c56d88ef3d56b3acd4c0af1152889a02d325ed099f3daf1fe3ce1"
+                  "key": {
+                    "symbol": "buyer"
+                  },
+                  "val": {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
+                  }
                 },
                 {
-                  "bytes": "9dd776487d89019277aaa62dc135a68c20db2a3053ccbe0e9f89cd1e13f57ca4"
+                  "key": {
+                    "symbol": "credit_id"
+                  },
+                  "val": {
+                    "bytes": "68ddc8506e3c56d88ef3d56b3acd4c0af1152889a02d325ed099f3daf1fe3ce1"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "retirement_id"
+                  },
+                  "val": {
+                    "bytes": "9dd776487d89019277aaa62dc135a68c20db2a3053ccbe0e9f89cd1e13f57ca4"
+                  }
                 }
               ]
             }
@@ -2946,18 +2961,33 @@
             "topics": [
               {
                 "symbol": "retire"
-              },
-              {
-                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
               }
             ],
             "data": {
-              "vec": [
+              "map": [
                 {
-                  "bytes": "713c2deacafd1383296da65aa120a86921e2284dd7674d2a700a424bb89a30b7"
+                  "key": {
+                    "symbol": "buyer"
+                  },
+                  "val": {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
+                  }
                 },
                 {
-                  "bytes": "7f291ae1f10a72bcbd04b5d827034f4dd889f8866e9a81492839529b7b6b516e"
+                  "key": {
+                    "symbol": "credit_id"
+                  },
+                  "val": {
+                    "bytes": "713c2deacafd1383296da65aa120a86921e2284dd7674d2a700a424bb89a30b7"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "retirement_id"
+                  },
+                  "val": {
+                    "bytes": "7f291ae1f10a72bcbd04b5d827034f4dd889f8866e9a81492839529b7b6b516e"
+                  }
                 }
               ]
             }
@@ -2976,18 +3006,33 @@
             "topics": [
               {
                 "symbol": "retire"
-              },
-              {
-                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
               }
             ],
             "data": {
-              "vec": [
+              "map": [
                 {
-                  "bytes": "b290a7b6673a3a1ade955982cdd38e5f4c4e2d5fe2b6e207d940a3a7e51d5e10"
+                  "key": {
+                    "symbol": "buyer"
+                  },
+                  "val": {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
+                  }
                 },
                 {
-                  "bytes": "0abe97aefb99cc2f98789dde2ef099537b1de17a3d39fe3b51d97771f7725077"
+                  "key": {
+                    "symbol": "credit_id"
+                  },
+                  "val": {
+                    "bytes": "b290a7b6673a3a1ade955982cdd38e5f4c4e2d5fe2b6e207d940a3a7e51d5e10"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "retirement_id"
+                  },
+                  "val": {
+                    "bytes": "0abe97aefb99cc2f98789dde2ef099537b1de17a3d39fe3b51d97771f7725077"
+                  }
                 }
               ]
             }
@@ -3006,18 +3051,33 @@
             "topics": [
               {
                 "symbol": "retire"
-              },
-              {
-                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
               }
             ],
             "data": {
-              "vec": [
+              "map": [
                 {
-                  "bytes": "d5e37de10469ae0a48d9ca278b0848ea7bea4e04fe3f0b3e5bbf630b0721164a"
+                  "key": {
+                    "symbol": "buyer"
+                  },
+                  "val": {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
+                  }
                 },
                 {
-                  "bytes": "0e606734d6ad428f62a15e702422f396fa9f90cc16be73174bb9f9eb0f01d40b"
+                  "key": {
+                    "symbol": "credit_id"
+                  },
+                  "val": {
+                    "bytes": "d5e37de10469ae0a48d9ca278b0848ea7bea4e04fe3f0b3e5bbf630b0721164a"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "retirement_id"
+                  },
+                  "val": {
+                    "bytes": "0e606734d6ad428f62a15e702422f396fa9f90cc16be73174bb9f9eb0f01d40b"
+                  }
                 }
               ]
             }
@@ -3036,18 +3096,33 @@
             "topics": [
               {
                 "symbol": "retire"
-              },
-              {
-                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
               }
             ],
             "data": {
-              "vec": [
+              "map": [
                 {
-                  "bytes": "a85b1b1b1f79184fedae487c88acd4b5e98f75b7779568906b2a68c7439a53ae"
+                  "key": {
+                    "symbol": "buyer"
+                  },
+                  "val": {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
+                  }
                 },
                 {
-                  "bytes": "0fc10bed53863351175938893b40fc32464b2156f7cb7192c3428e73d0ffb190"
+                  "key": {
+                    "symbol": "credit_id"
+                  },
+                  "val": {
+                    "bytes": "a85b1b1b1f79184fedae487c88acd4b5e98f75b7779568906b2a68c7439a53ae"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "retirement_id"
+                  },
+                  "val": {
+                    "bytes": "0fc10bed53863351175938893b40fc32464b2156f7cb7192c3428e73d0ffb190"
+                  }
                 }
               ]
             }

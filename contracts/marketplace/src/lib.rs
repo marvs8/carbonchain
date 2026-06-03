@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, contracterror, symbol_short, Env, Address, String, BytesN, Symbol, Vec, IntoVal};
+use soroban_sdk::{contract, contractimpl, contracttype, contracterror, contractevent, Env, Address, String, BytesN, Symbol, Vec, IntoVal};
 
 // ── TTL constants ─────────────────────────────────────────────────────────────
 /// Minimum TTL in ledgers (~1 year at 5s/ledger).
@@ -82,6 +82,33 @@ pub enum MarketplaceError {
     Overflow        = 124,
 }
 
+#[contractevent]
+#[derive(Clone)]
+pub struct Paused {
+    pub admin: Address,
+}
+
+#[contractevent]
+#[derive(Clone)]
+pub struct Unpaused {
+    pub admin: Address,
+}
+
+#[contractevent]
+#[derive(Clone)]
+pub struct OfferNew {
+    pub seller: Address,
+    pub offer_id: u64,
+}
+
+#[contractevent]
+#[derive(Clone)]
+pub struct OfferCxl {
+    pub seller: Address,
+    pub offer_id: u64,
+    pub escrowed: i128,
+}
+
 // ── Contract ─────────────────────────────────────────────────────────────────
 
 #[contract]
@@ -89,15 +116,6 @@ pub struct Marketplace;
 
 fn get_nonce(env: &Env, addr: &Address) -> u64 {
     env.storage().persistent().get(&DataKey::Nonce(addr.clone())).unwrap_or(0u64)
-}
-
-fn consume_nonce(env: &Env, addr: &Address, expected: u64) -> bool {
-    let current = get_nonce(env, addr);
-    if current != expected { return false; }
-    let key = DataKey::Nonce(addr.clone());
-    env.storage().persistent().set(&key, &(current + 1));
-    env.storage().persistent().extend_ttl(&key, TTL_THRESHOLD, MIN_TTL);
-    true
 }
 
 #[contractimpl]
@@ -126,7 +144,7 @@ impl Marketplace {
     pub fn pause(env: Env, admin: Address) -> Result<(), MarketplaceError> {
         Self::require_admin(&env, &admin)?;
         env.storage().instance().set(&DataKey::Paused, &true);
-        env.events().publish((symbol_short!("paused"),), admin);
+        Paused { admin }.publish(&env);
         Ok(())
     }
 
@@ -138,7 +156,7 @@ impl Marketplace {
     pub fn unpause(env: Env, admin: Address) -> Result<(), MarketplaceError> {
         Self::require_admin(&env, &admin)?;
         env.storage().instance().set(&DataKey::Paused, &false);
-        env.events().publish((symbol_short!("unpaused"),), admin);
+        Unpaused { admin }.publish(&env);
         Ok(())
     }
 
@@ -239,7 +257,7 @@ impl Marketplace {
         env.storage().persistent().set(&key, &ids);
         env.storage().persistent().extend_ttl(&key, TTL_THRESHOLD, MIN_TTL);
 
-        env.events().publish((symbol_short!("offer_new"), seller), offer_id);
+        OfferNew { seller, offer_id }.publish(&env);
         Ok(offer_id)
     }
 
@@ -305,7 +323,7 @@ impl Marketplace {
         // Remove escrowed amount record
         env.storage().persistent().remove(&DataKey::EscrowedAmount(offer_id));
 
-        env.events().publish((symbol_short!("offer_cxl"), seller.clone()), (offer_id, escrowed));
+        OfferCxl { seller: seller.clone(), offer_id, escrowed }.publish(&env);
         Ok(())
     }
 

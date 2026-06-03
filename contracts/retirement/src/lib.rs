@@ -5,7 +5,7 @@ pub mod errors;
 use crate::types::{DataKey, RetirementRecord, CreditMetadata, CreditStatus, MIN_TTL, TTL_THRESHOLD};
 use crate::errors::RetirementError;
 use soroban_sdk::{
-    contract, contractimpl, symbol_short,
+    contract, contractimpl, contractevent,
     Address, BytesN, Env, String, Symbol, Vec,
     IntoVal,
 };
@@ -22,6 +22,26 @@ fn consume_nonce(env: &Env, addr: &Address, expected: u64) -> bool {
     env.storage().persistent().set(&key, &(current + 1));
     env.storage().persistent().extend_ttl(&key, TTL_THRESHOLD, MIN_TTL);
     true
+}
+
+#[contractevent]
+#[derive(Clone)]
+pub struct Paused {
+    pub admin: Address,
+}
+
+#[contractevent]
+#[derive(Clone)]
+pub struct Unpaused {
+    pub admin: Address,
+}
+
+#[contractevent]
+#[derive(Clone)]
+pub struct Retire {
+    pub buyer: Address,
+    pub credit_id: BytesN<32>,
+    pub retirement_id: BytesN<32>,
 }
 
 #[contract]
@@ -49,7 +69,7 @@ impl Retirement {
     pub fn pause(env: Env, admin: Address) -> Result<(), RetirementError> {
         Self::require_admin(&env, &admin)?;
         env.storage().instance().set(&DataKey::Paused, &true);
-        env.events().publish((symbol_short!("paused"),), admin);
+        Paused { admin }.publish(&env);
         Ok(())
     }
 
@@ -61,7 +81,7 @@ impl Retirement {
     pub fn unpause(env: Env, admin: Address) -> Result<(), RetirementError> {
         Self::require_admin(&env, &admin)?;
         env.storage().instance().set(&DataKey::Paused, &false);
-        env.events().publish((symbol_short!("unpaused"),), admin);
+        Unpaused { admin }.publish(&env);
         Ok(())
     }
 
@@ -162,10 +182,7 @@ impl Retirement {
         env.storage().persistent().extend_ttl(&acct_key, TTL_THRESHOLD, MIN_TTL);
 
         // Emit retirement event
-        env.events().publish(
-            (symbol_short!("retire"), buyer),
-            (credit_id, retirement_id.clone()),
-        );
+        Retire { buyer, credit_id, retirement_id: retirement_id.clone() }.publish(&env);
 
         Ok(retirement_id)
     }
@@ -248,10 +265,7 @@ impl Retirement {
             );
 
             // Emit individual retirement event
-            env.events().publish(
-                (symbol_short!("retire"), buyer.clone()),
-                (credit_id.clone(), retirement_id),
-            );
+            Retire { buyer: buyer.clone(), credit_id: credit_id.clone(), retirement_id }.publish(&env);
         }
 
         env.storage().persistent().set(&acct_key, &list);

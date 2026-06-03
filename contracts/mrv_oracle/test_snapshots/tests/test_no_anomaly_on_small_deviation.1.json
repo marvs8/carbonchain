@@ -2337,21 +2337,41 @@
             "topics": [
               {
                 "symbol": "mrv_upd"
-              },
-              {
-                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
               }
             ],
             "data": {
-              "vec": [
+              "map": [
                 {
-                  "string": "PROJ-001"
+                  "key": {
+                    "symbol": "anomaly"
+                  },
+                  "val": {
+                    "bool": false
+                  }
                 },
                 {
-                  "i128": "1100000"
+                  "key": {
+                    "symbol": "oracle"
+                  },
+                  "val": {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
+                  }
                 },
                 {
-                  "bool": false
+                  "key": {
+                    "symbol": "project_id"
+                  },
+                  "val": {
+                    "string": "PROJ-001"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "tonnes"
+                  },
+                  "val": {
+                    "i128": "1100000"
+                  }
                 }
               ]
             }

@@ -1319,18 +1319,33 @@
             "topics": [
               {
                 "symbol": "retire"
-              },
-              {
-                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
               }
             ],
             "data": {
-              "vec": [
+              "map": [
                 {
-                  "bytes": "68ddc8506e3c56d88ef3d56b3acd4c0af1152889a02d325ed099f3daf1fe3ce1"
+                  "key": {
+                    "symbol": "buyer"
+                  },
+                  "val": {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
+                  }
                 },
                 {
-                  "bytes": "8e94c44ff726df52633a4375c135e9523bc714274ceb6d800de052702c56ab0f"
+                  "key": {
+                    "symbol": "credit_id"
+                  },
+                  "val": {
+                    "bytes": "68ddc8506e3c56d88ef3d56b3acd4c0af1152889a02d325ed099f3daf1fe3ce1"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "retirement_id"
+                  },
+                  "val": {
+                    "bytes": "8e94c44ff726df52633a4375c135e9523bc714274ceb6d800de052702c56ab0f"
+                  }
                 }
               ]
             }

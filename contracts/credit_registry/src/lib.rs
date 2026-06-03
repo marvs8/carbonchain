@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, Env, Address, String, BytesN, Vec, Symbol, symbol_short};
+use soroban_sdk::{contract, contractimpl, Env, Address, String, BytesN, Vec};
 use soroban_sdk::xdr::ToXdr;
 
 // ── Unit convention ──────────────────────────────────────────────────────────
@@ -35,12 +35,11 @@ use crate::storage::{
     set_retirement_contract, get_retirement_contract,
     set_paused, is_paused,
     get_nonce, consume_nonce,
-    get_verifier_reputation, set_verifier_reputation,
+    get_verifier_reputation,
     increment_approval_count, increment_dispute_count,
     get_issuers, set_issuers, is_issuer as storage_is_issuer,
     get_methodologies, set_methodologies, is_methodology_valid,
     get_verifier_pending_count, increment_verifier_pending, decrement_verifier_pending,
-    set_credit_assigned_verifier, get_credit_assigned_verifier, remove_credit_assigned_verifier,
     get_required_approvals, set_required_approvals,
     get_credit_approvals, set_credit_approvals, remove_credit_approvals,
     set_session, get_session, get_session_op_count, increment_session_op_count,
@@ -51,8 +50,11 @@ use crate::types::{
     ProjectMetadata, Session, AuditLogEntry,
 };
 use crate::events::{
-    credit_submitted, credit_minted, verifier_registered, verifier_removed,
-    contract_paused, contract_unpaused, credit_transferred, credit_split, batch_retired,
+    ContractPaused, ContractUnpaused,
+    VerifierRegistered, VerifierRemoved,
+    CreditSubmitted, CreditMinted, CreditFlagged,
+    CreditTransferred, CreditSplit, CreditExpired, CreditDisputed,
+    DisputeResolved, CreditsMerged, ProjectRegistered, SessionNew,
 };
 
 
@@ -101,7 +103,7 @@ impl CreditRegistry {
             return Err(CarbonChainError::Unauthorized);
         }
         set_paused(&env, true);
-        contract_paused(&env, admin);
+        ContractPaused { admin }.publish(&env);
         Ok(())
     }
 
@@ -117,7 +119,7 @@ impl CreditRegistry {
             return Err(CarbonChainError::Unauthorized);
         }
         set_paused(&env, false);
-        contract_unpaused(&env, admin);
+        ContractUnpaused { admin }.publish(&env);
         Ok(())
     }
 
@@ -150,7 +152,7 @@ impl CreditRegistry {
         let mut verifiers = get_verifiers(&env);
         verifiers.push_back(verifier.clone());
         set_verifiers(&env, &verifiers);
-        verifier_registered(&env, admin, verifier);
+        VerifierRegistered { admin, verifier }.publish(&env);
         Ok(())
     }
 
@@ -187,7 +189,7 @@ impl CreditRegistry {
             }
         }
         set_verifiers(&env, &new_list);
-        verifier_removed(&env, admin, verifier);
+        VerifierRemoved { admin, verifier }.publish(&env);
         Ok(())
     }
 
@@ -397,7 +399,7 @@ impl CreditRegistry {
             increment_verifier_pending(&env, &v);
         }
 
-        credit_submitted(&env, issuer, project_id, id.clone(), tonnes);
+        CreditSubmitted { issuer, project_id, credit_id: id.clone(), tonnes }.publish(&env);
 
         Ok(id)
     }
@@ -443,7 +445,7 @@ impl CreditRegistry {
                 decrement_verifier_pending(&env, &v);
             }
 
-            credit_minted(&env, verifier, credit_id);
+            CreditMinted { verifier, id: credit_id }.publish(&env);
         } else {
             // Not yet at threshold — save updated approvals list, no status change.
             set_credit(&env, &credit_id, &credit);
@@ -487,7 +489,7 @@ impl CreditRegistry {
                 decrement_verifier_pending(&env, &v);
             }
         }
-        crate::events::credit_flagged(&env, credit_id, reason);
+        CreditFlagged { id: credit_id, reason }.publish(&env);
         Ok(())
     }
 
@@ -534,7 +536,7 @@ impl CreditRegistry {
         }
         credit.owner = to.clone();
         set_credit(&env, &credit_id, &credit);
-        credit_transferred(&env, from, to, credit_id);
+        CreditTransferred { from, to, credit_id }.publish(&env);
         Ok(())
     }
 
@@ -588,7 +590,7 @@ impl CreditRegistry {
         original.status = CreditStatus::Retired;
         set_credit(&env, &credit_id, &original);
 
-        credit_split(&env, credit_id, child1_id.clone(), child2_id.clone());
+        CreditSplit { original_id: credit_id, child1_id: child1_id.clone(), child2_id: child2_id.clone() }.publish(&env);
         Ok((child1_id, child2_id))
     }
 
@@ -754,7 +756,7 @@ impl CreditRegistry {
             created_at: env.ledger().timestamp(),
         };
         env.storage().persistent().set(&DataKey::Project(project_id.clone()), &metadata);
-        env.events().publish((symbol_short!("proj_reg"), owner), project_id);
+        ProjectRegistered { owner, project_id }.publish(&env);
         Ok(())
     }
 
@@ -778,7 +780,7 @@ impl CreditRegistry {
         }
         credit.status = CreditStatus::Expired;
         set_credit(&env, &credit_id, &credit);
-        env.events().publish((symbol_short!("expired"),), credit_id);
+        CreditExpired { credit_id }.publish(&env);
         Ok(())
     }
 
@@ -811,7 +813,7 @@ impl CreditRegistry {
         credit.status = CreditStatus::Disputed;
         set_credit(&env, &credit_id, &credit);
         env.storage().persistent().set(&DataKey::Dispute(credit_id.clone()), &evidence_ipfs_hash);
-        env.events().publish((symbol_short!("dispute"), disputer), (credit_id, evidence_ipfs_hash));
+        CreditDisputed { disputer, credit_id, evidence: evidence_ipfs_hash }.publish(&env);
         Ok(())
     }
 
@@ -839,7 +841,7 @@ impl CreditRegistry {
         }
         set_credit(&env, &credit_id, &credit);
         env.storage().persistent().remove(&DataKey::Dispute(credit_id.clone()));
-        env.events().publish((symbol_short!("resolved"),), (credit_id, outcome));
+        DisputeResolved { credit_id, outcome }.publish(&env);
         Ok(())
     }
 
@@ -946,7 +948,7 @@ impl CreditRegistry {
             set_credit(&env, &id, &credit);
         }
 
-        env.events().publish((symbol_short!("merged"),), (merged_id.clone(), credit_ids.len() as u32));
+        CreditsMerged { new_id: merged_id.clone(), source_count: credit_ids.len() as u32 }.publish(&env);
         Ok(merged_id)
     }
 
@@ -993,7 +995,7 @@ impl CreditRegistry {
             operation_count: 0,
         };
         set_session(&env, &session_id, &session);
-        env.events().publish((symbol_short!("sess_new"), initiator), session_id.clone());
+        SessionNew { initiator, session_id: session_id.clone() }.publish(&env);
         Ok(session_id)
     }
 
