@@ -16,6 +16,10 @@ jobs:
         uses: dtolnay/rust-toolchain@1.91.0
         with:
           targets: wasm32v1-none
+          components: rustfmt
+      # #193 — enforce consistent formatting across all four contracts
+      - name: Check Rust formatting
+        run: cd contracts && cargo fmt --all -- --check
       # #47 — cache cargo registry and build artifacts for all four contracts
       - name: Cache cargo dependencies
         uses: actions/cache@v4

@@ -256,11 +256,13 @@ ng test --code-coverage
 
 ### Rust
 
-Format your code with rustfmt:
+Format your code with rustfmt before every commit — this is enforced by CI (`cargo fmt --all -- --check`):
 
 ```bash
-cargo fmt
+cd contracts && cargo fmt --all
 ```
+
+Project style is configured in `contracts/rustfmt.toml` (100-char line width, 2021 edition, grouped imports). CI will fail if any contract is not formatted.
 
 Lint with clippy:
 
@@ -498,7 +500,7 @@ When creating a PR, please include:
 
 - [ ] Tests added or updated
 - [ ] Documentation updated
-- [ ] Rust: `cargo fmt` and `cargo clippy` pass
+- [ ] Rust: `cargo fmt --all` (check with `cargo fmt --all -- --check`) and `cargo clippy` pass
 - [ ] API: `npm run lint` and `npm run test` pass
 - [ ] Frontend: `ng lint` and `ng test` pass
 - [ ] No secrets or private keys committed
