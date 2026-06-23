@@ -161,7 +161,10 @@ export class ApiService {
   }
 
   /** POST /admin/verifiers/register */
-  registerVerifier(address: string, token: string): Observable<{ registered: boolean; address: string }> {
+  registerVerifier(
+    address: string,
+    token: string,
+  ): Observable<{ registered: boolean; address: string }> {
     return this.http.post<{ registered: boolean; address: string }>(
       `${this.baseUrl}/admin/verifiers/register`,
       { address },
@@ -179,7 +182,11 @@ export class ApiService {
   }
 
   /** POST /admin/verifiers/:id/configure */
-  configureVerifier(id: string, config: VerifierConfig, token: string): Observable<{ configured: boolean; verifierId: string }> {
+  configureVerifier(
+    id: string,
+    config: VerifierConfig,
+    token: string,
+  ): Observable<{ configured: boolean; verifierId: string }> {
     return this.http.post<{ configured: boolean; verifierId: string }>(
       `${this.baseUrl}/admin/verifiers/${id}/configure`,
       config,
