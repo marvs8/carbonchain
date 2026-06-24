@@ -62,6 +62,11 @@ import { Offer } from '@shared';
               }
             </tbody>
           </table>
+          <div class="pagination">
+            <button class="btn btn-outline" (click)="store.prevPage()" [disabled]="store.page() === 0">← Prev</button>
+            <span class="page-info">Page {{ store.page() + 1 }} of {{ store.totalPages() }} · {{ store.totalActiveOffers() }} listings</span>
+            <button class="btn btn-outline" (click)="store.nextPage()" [disabled]="store.page() >= store.totalPages() - 1">Next →</button>
+          </div>
         }
       }
     </div>
