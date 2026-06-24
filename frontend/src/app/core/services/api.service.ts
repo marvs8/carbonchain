@@ -200,3 +200,10 @@ export class ApiService {
     return new HttpHeaders({ Authorization: `Bearer ${token}` });
   }
 }
+
+export interface VerifierRecord {
+  address: string;
+  name: string;
+  status: 'pending' | 'approved' | 'removed';
+  registered_at: number;
+}
